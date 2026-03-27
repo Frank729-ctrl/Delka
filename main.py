@@ -37,6 +37,7 @@ from routers import (
 )
 from routers.admin_console_router import router as admin_console_router
 from routers.console_router import router as console_router
+from routers.developer_api_router import router as developer_api_router
 from routers.vision_router import router as vision_router
 from routers.chat_router import router as chat_router
 from routers.feedback_router import router as feedback_router
@@ -155,4 +156,5 @@ app.include_router(console_router,             tags=["Developer Console"])
 app.include_router(vision_router,              tags=["Visual Search"])
 app.include_router(chat_router,                tags=["Chat"])
 app.include_router(feedback_router,            tags=["Feedback"])
+app.include_router(developer_api_router,       tags=["Developer API"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST

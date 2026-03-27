@@ -11,6 +11,7 @@ _PREFIX_LEN = 20
 _SKIP_PATHS = {"/v1/health", "/docs", "/openapi.json", "/redoc", "/admin/dashboard"}
 
 _ADMIN_PREFIX = "/v1/admin"
+_DEVELOPER_PREFIX = "/v1/developer"
 
 # Paths that must pass through unauthenticated so the honeypot route can catch
 # them, log the probe, block the IP, and return 404.
@@ -31,6 +32,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         if path in _SKIP_PATHS:
+            return await call_next(request)
+
+        # Developer API routes — session-based auth handled in the router itself
+        if path.startswith(_DEVELOPER_PREFIX):
             return await call_next(request)
 
         # Unknown paths → let honeypot router handle them
