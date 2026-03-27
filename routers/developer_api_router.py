@@ -84,6 +84,59 @@ async def developer_overview(x_delkai_session: str | None = Header(default=None)
     return overview
 
 
+class CreateKeyRequest(BaseModel):
+    key_name: str
+
+
+class RevokeKeyRequest(BaseModel):
+    key_prefix: str
+
+
+@router.post("/keys/create")
+async def developer_create_key(
+    body: CreateKeyRequest,
+    x_delkai_session: str | None = Header(default=None),
+):
+    account = await _require_session(x_delkai_session)
+    # Limit to 10 keys per developer
+    async with AsyncSessionLocal() as db:
+        existing = await get_developer_keys(account.email, db)
+    if len(existing) >= 10:
+        raise HTTPException(status_code=429, detail="Key limit reached (max 10 per account).")
+    async with AsyncSessionLocal() as db:
+        from security.key_store import create_key_pair
+        result = await create_key_pair(
+            platform=body.key_name,
+            owner=account.email,
+            requires_hmac=False,
+            db=db,
+        )
+    return result
+
+
+@router.post("/keys/revoke")
+async def developer_revoke_key(
+    body: RevokeKeyRequest,
+    x_delkai_session: str | None = Header(default=None),
+):
+    account = await _require_session(x_delkai_session)
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import select
+        from models.api_key_model import APIKey
+        result = await db.execute(
+            select(APIKey).where(
+                APIKey.raw_prefix == body.key_prefix,
+                APIKey.owner == account.email,
+            )
+        )
+        key = result.scalar_one_or_none()
+        if not key:
+            raise HTTPException(status_code=404, detail="Key not found.")
+        key.is_active = False
+        await db.commit()
+    return {"success": True}
+
+
 class ClerkProvisionRequest(BaseModel):
     email: str
     full_name: str
