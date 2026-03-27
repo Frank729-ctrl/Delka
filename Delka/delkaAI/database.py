@@ -17,11 +17,19 @@ def _build_database_url() -> str:
     )
 
 
-engine = create_async_engine(
-    _build_database_url(),
-    echo=not settings.is_production,
-    pool_pre_ping=True,
-)
+def _engine_kwargs() -> dict:
+    kwargs: dict = {"echo": not settings.is_production, "pool_pre_ping": True}
+    url = _build_database_url()
+    if "supabase.com" in url or "supabase.co" in url:
+        import ssl as _ssl
+        ctx = _ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
+        kwargs["connect_args"] = {"ssl": ctx}
+    return kwargs
+
+
+engine = create_async_engine(_build_database_url(), **_engine_kwargs())
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
