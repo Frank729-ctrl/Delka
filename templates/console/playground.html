@@ -28,6 +28,7 @@
         <option value="/v1/cv/generate">POST /v1/cv/generate</option>
         <option value="/v1/cover-letter/generate">POST /v1/cover-letter/generate</option>
         <option value="/v1/support/chat">POST /v1/support/chat (stream)</option>
+        <option value="/v1/chat">POST /v1/chat (memory + personality)</option>
         <option value="/v1/health">GET /v1/health</option>
       </select>
     </div>
@@ -90,6 +91,12 @@ var PAYLOADS = {
     platform: "playground",
     language: "en"
   }, null, 2),
+  '/v1/chat': JSON.stringify({
+    user_id: "playground-user",
+    platform: "generic",
+    session_id: "playground-" + Date.now(),
+    message: "Hi! My name is Kofi and I need help with my CV."
+  }, null, 2),
   '/v1/health': ''
 };
 
@@ -134,8 +141,8 @@ async function sendRequest() {
     opts.body = payload;
   }
 
-  // Streaming support for support chat
-  if (ep === '/v1/support/chat') {
+  // Streaming support for support chat and full chat
+  if (ep === '/v1/support/chat' || ep === '/v1/chat') {
     output.textContent = '';
     try {
       var resp = await fetch(ep, opts);

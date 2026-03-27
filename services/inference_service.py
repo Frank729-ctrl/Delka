@@ -38,6 +38,12 @@ def get_task_chain(task: str) -> list[dict]:
             {"provider": settings.SUPPORT_FALLBACK_PROVIDER,
              "model": settings.SUPPORT_FALLBACK_MODEL},
         ],
+        "chat": [
+            {"provider": settings.SUPPORT_PRIMARY_PROVIDER,
+             "model": settings.SUPPORT_PRIMARY_MODEL},
+            {"provider": settings.SUPPORT_FALLBACK_PROVIDER,
+             "model": settings.SUPPORT_FALLBACK_MODEL},
+        ],
     }
     return chains.get(task, chains["support"])
 
