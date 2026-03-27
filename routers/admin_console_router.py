@@ -1,4 +1,4 @@
-"""Admin Console — server-rendered UI at /admin/* (master key cookie auth)."""
+"""Admin Console — server-rendered UI at /admin/* (email + password auth)."""
 from fastapi import APIRouter, Cookie, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -21,10 +21,11 @@ _env = Environment(
 )
 
 _COOKIE_NAME = "delka_admin_session"
+_SESSION_TOKEN = "delka_admin_authenticated"
 
 
 def _check_auth(session_key: str | None) -> bool:
-    return session_key == settings.SECRET_MASTER_KEY
+    return session_key == _SESSION_TOKEN
 
 
 def _login_redirect() -> RedirectResponse:
@@ -41,16 +42,17 @@ async def admin_login_page(error: str = ""):
 
 @router.post("/admin/login")
 async def admin_login_post(
-    master_key: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
 ):
-    if master_key != settings.SECRET_MASTER_KEY:
+    if email != settings.ADMIN_EMAIL or password != settings.ADMIN_PASSWORD:
         tpl = _env.get_template("admin/login.html")
-        return HTMLResponse(tpl.render(error="Invalid master key."), status_code=401)
+        return HTMLResponse(tpl.render(error="Invalid email or password."), status_code=401)
 
     response = RedirectResponse(url="/admin/keys", status_code=302)
     response.set_cookie(
         key=_COOKIE_NAME,
-        value=master_key,
+        value=_SESSION_TOKEN,
         httponly=True,
         samesite="lax",
         max_age=3600 * 8,

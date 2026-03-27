@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     # Security
     SECRET_MASTER_KEY: str = "fd-delka-mk-replace-this"
 
+    # Admin UI login
+    ADMIN_EMAIL: str = "admin@example.com"
+    ADMIN_PASSWORD: str = "change-me"
+
     # Database
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306

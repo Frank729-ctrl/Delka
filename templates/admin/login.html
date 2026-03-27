@@ -14,8 +14,10 @@
     <div class="alert alert-error">{{ error }}</div>
     {% endif %}
     <form method="post" action="/admin/login">
-      <label for="master_key">Master Key</label>
-      <input type="password" id="master_key" name="master_key" placeholder="fd-delka-mk-…" required autofocus />
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="admin@example.com" required autofocus />
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required />
       <button type="submit" class="btn btn-primary">Sign In</button>
     </form>
   </div>
