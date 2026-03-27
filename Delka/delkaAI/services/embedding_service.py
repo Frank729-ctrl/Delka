@@ -9,9 +9,18 @@ _model = None
 def get_model():
     global _model
     if _model is None:
+        import os
         from sentence_transformers import SentenceTransformer
         from config import settings
-        _model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        os.environ.setdefault("HF_HUB_OFFLINE", "0")
+        try:
+            _model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        except Exception as e:
+            raise RuntimeError(
+                f"CLIP model '{settings.EMBEDDING_MODEL}' could not be loaded. "
+                f"Run: python -c \"from sentence_transformers import SentenceTransformer; SentenceTransformer('{settings.EMBEDDING_MODEL}')\" "
+                f"to download it first. Error: {e}"
+            )
     return _model
 
 

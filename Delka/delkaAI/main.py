@@ -50,8 +50,6 @@ _logger = logging.getLogger("delkaai.main")
 async def lifespan(app: FastAPI):
     await create_all_tables()
     asyncio.create_task(process_jobs(AsyncSessionLocal))
-    from services.embedding_service import get_model
-    get_model()
     request_logger.info(
         f"DelkaAI v1 started | ENV:{settings.APP_ENV} | Model:{settings.OLLAMA_MODEL}"
     )

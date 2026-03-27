@@ -76,33 +76,30 @@ async def chat(
     full_response = "".join(tokens)
     yield "data: [DONE]\n\n"
 
-    # 7. Store conversation
-    await conversation_history_service.store_message(
-        user_id, platform, session_id, "user", request.message, db
-    )
-    await conversation_history_service.store_message(
-        user_id, platform, session_id, "assistant", full_response, db
-    )
-
-    # 8. Update profile
-    updates = await memory_service.extract_profile_updates(
-        request.message, full_response, profile
-    )
-    await memory_service.update_profile(user_id, platform, updates, db)
-
-    # 9. Store feedback log (unrated until user submits rating)
-    await feedback_service.store_feedback_log(
-        user_id=user_id,
-        platform=platform,
-        session_id=session_id,
-        service="chat",
-        request_data={"message": request.message},
-        response_data={"response": full_response[:500]},
-        provider_used="groq",
-        model_used="",
-        response_ms=0,
-        db=db,
-    )
-
-    # 10. Summarize if history is too long
-    await conversation_history_service.summarize_old_history(user_id, platform, db)
+    # 7-10. Post-stream persistence — wrapped so a session edge case never surfaces to the client
+    try:
+        await conversation_history_service.store_message(
+            user_id, platform, session_id, "user", request.message, db
+        )
+        await conversation_history_service.store_message(
+            user_id, platform, session_id, "assistant", full_response, db
+        )
+        updates = await memory_service.extract_profile_updates(
+            request.message, full_response, profile
+        )
+        await memory_service.update_profile(user_id, platform, updates, db)
+        await feedback_service.store_feedback_log(
+            user_id=user_id,
+            platform=platform,
+            session_id=session_id,
+            service="chat",
+            request_data={"message": request.message},
+            response_data={"response": full_response[:500]},
+            provider_used="groq",
+            model_used="",
+            response_ms=0,
+            db=db,
+        )
+        await conversation_history_service.summarize_old_history(user_id, platform, db)
+    except Exception:
+        pass
