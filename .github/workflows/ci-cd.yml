@@ -10,9 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: Delka/delkaAI
 
     steps:
       - uses: actions/checkout@v4
