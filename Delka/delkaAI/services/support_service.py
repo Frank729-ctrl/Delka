@@ -1,4 +1,5 @@
 import asyncio
+import time
 from fastapi.responses import StreamingResponse
 from schemas.support_schema import SupportChatRequest
 from services.language_service import detect_language, get_language_instruction
@@ -11,8 +12,9 @@ _FALLBACK = "I'm here to help. Could you rephrase your question?"
 _CHUNK_SIZE = 4  # characters per SSE token when fake-streaming
 
 
-async def handle_chat(data: SupportChatRequest) -> StreamingResponse:
+async def handle_chat(data: SupportChatRequest, db=None) -> StreamingResponse:
     session_id = data.session_id or "anon"
+    start_ms = int(time.time() * 1000)
 
     lang = detect_language(data.message)
     lang_instruction = get_language_instruction(lang)
@@ -36,6 +38,37 @@ async def handle_chat(data: SupportChatRequest) -> StreamingResponse:
 
     append_message(session_id, "user", data.message)
     append_message(session_id, "assistant", full_response)
+
+    # Memory hooks — only when user_id provided and db available
+    if db is not None and data.user_id:
+        try:
+            response_ms = int(time.time() * 1000) - start_ms
+            from services import conversation_history_service, feedback_service
+            from services.memory_service import extract_profile_updates, get_or_create_profile, update_profile
+
+            profile = await get_or_create_profile(data.user_id, data.platform, db)
+            await conversation_history_service.store_message(
+                data.user_id, data.platform, session_id, "user", data.message, db
+            )
+            await conversation_history_service.store_message(
+                data.user_id, data.platform, session_id, "assistant", full_response, db
+            )
+            await feedback_service.store_feedback_log(
+                user_id=data.user_id,
+                platform=data.platform,
+                session_id=session_id,
+                service="support",
+                request_data={"message": data.message},
+                response_data={"response": full_response[:500]},
+                provider_used="groq",
+                model_used="",
+                response_ms=response_ms,
+                db=db,
+            )
+            updates = await extract_profile_updates(data.message, full_response, profile)
+            await update_profile(data.user_id, data.platform, updates, db)
+        except Exception:
+            pass  # Memory failures never break chat
 
     async def sse_generator():
         for i in range(0, len(full_response), _CHUNK_SIZE):

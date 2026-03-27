@@ -60,6 +60,18 @@ class Settings(BaseSettings):
     SUPPORT_FALLBACK_PROVIDER: str = "ollama"
     SUPPORT_FALLBACK_MODEL: str = "mistral"
 
+    # Visual Search
+    VISION_PRIMARY_PROVIDER: str = "groq"
+    VISION_PRIMARY_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    VISION_FALLBACK_PROVIDER: str = "ollama"
+    VISION_FALLBACK_MODEL: str = "llava:13b"
+    CHROMA_PERSIST_DIR: str = "./vector_store/chroma"
+    EMBEDDING_MODEL: str = "clip-ViT-B-32"
+    VISION_DEFAULT_LIMIT: int = 20
+    VISION_DEFAULT_MIN_SIMILARITY: float = 0.65
+    VISION_MAX_IMAGE_SIZE_MB: int = 10
+    VISION_INDEX_BATCH_SIZE: int = 100
+
     # Misc
     LLM_MAX_RETRIES: int = 2
     WEBHOOK_TIMEOUT_SECONDS: int = 10

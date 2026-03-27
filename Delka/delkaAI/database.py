@@ -50,6 +50,10 @@ async def create_all_tables() -> None:
         developer_session_model,
         platform_registry_model,
         settings_store_model,
+        vision_index_model,
+        user_memory_profile_model,
+        conversation_log_model,
+        feedback_log_model,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

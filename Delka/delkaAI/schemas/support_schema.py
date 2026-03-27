@@ -5,6 +5,7 @@ class SupportChatRequest(BaseModel):
     message: str
     platform: str = "generic"
     session_id: str = ""
+    user_id: str = ""   # optional — enables memory when provided
 
 
 class SupportChatResponse(BaseModel):

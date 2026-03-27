@@ -1,6 +1,9 @@
 PK_ALLOWED_ENDPOINTS: list[str] = [
     "/v1/health",
     "/v1/support/chat",
+    "/v1/vision/search",
+    "/v1/chat",
+    "/v1/feedback",
 ]
 
 SK_ALLOWED_ENDPOINTS: list[str] = ["*"]  # all non-admin

@@ -115,7 +115,12 @@ async def test_engine():
         poolclass=StaticPool,
     )
     # Register all models
-    from models import api_key_model, usage_log_model, blocked_ip_model, webhook_model  # noqa
+    from models import (  # noqa
+        api_key_model, usage_log_model, blocked_ip_model, webhook_model,
+        developer_account_model, developer_session_model,
+        platform_registry_model, settings_store_model, vision_index_model,
+        user_memory_profile_model, conversation_log_model, feedback_log_model,
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine

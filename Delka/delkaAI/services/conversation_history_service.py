@@ -1,0 +1,131 @@
+from datetime import datetime
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def store_message(
+    user_id: str,
+    platform: str,
+    session_id: str,
+    role: str,
+    content: str,
+    db: AsyncSession,
+) -> None:
+    from models.conversation_log_model import ConversationLog
+
+    entry = ConversationLog(
+        user_id=user_id,
+        platform=platform,
+        session_id=session_id,
+        role=role,
+        content=content,
+        tokens_estimate=estimate_tokens(content),
+    )
+    db.add(entry)
+
+
+async def get_recent_history(
+    user_id: str,
+    platform: str,
+    db: AsyncSession,
+    limit: int = 10,
+) -> list[dict]:
+    from models.conversation_log_model import ConversationLog
+
+    result = await db.execute(
+        select(ConversationLog)
+        .where(
+            ConversationLog.user_id == user_id,
+            ConversationLog.platform == platform,
+        )
+        .order_by(ConversationLog.created_at.desc())
+        .limit(limit)
+    )
+    rows = result.scalars().all()
+    # Reverse to oldest-first for prompt injection
+    return [
+        {"role": r.role, "content": r.content, "created_at": str(r.created_at)}
+        for r in reversed(rows)
+    ]
+
+
+async def get_session_history(
+    user_id: str,
+    session_id: str,
+    db: AsyncSession,
+) -> list[dict]:
+    from models.conversation_log_model import ConversationLog
+
+    result = await db.execute(
+        select(ConversationLog)
+        .where(
+            ConversationLog.user_id == user_id,
+            ConversationLog.session_id == session_id,
+        )
+        .order_by(ConversationLog.created_at.asc())
+    )
+    rows = result.scalars().all()
+    return [
+        {"role": r.role, "content": r.content, "created_at": str(r.created_at)}
+        for r in rows
+    ]
+
+
+async def summarize_old_history(
+    user_id: str,
+    platform: str,
+    db: AsyncSession,
+) -> str:
+    from models.conversation_log_model import ConversationLog
+
+    result = await db.execute(
+        select(ConversationLog)
+        .where(
+            ConversationLog.user_id == user_id,
+            ConversationLog.platform == platform,
+        )
+        .order_by(ConversationLog.created_at.asc())
+    )
+    all_rows = result.scalars().all()
+
+    if len(all_rows) <= 50:
+        return ""
+
+    # Keep last 20, summarize the rest
+    to_summarize = all_rows[:-20]
+    to_keep = all_rows[-20:]
+
+    combined = "\n".join(
+        f"{r.role}: {r.content[:200]}" for r in to_summarize
+    )
+
+    from services.inference_service import generate_full_response
+    summary_text, _, _ = await generate_full_response(
+        task="support",
+        system_prompt="Summarize the following conversation history in 3-5 sentences. Focus on key facts about the user and what was discussed.",
+        user_prompt=combined,
+        temperature=0.3,
+        max_tokens=300,
+    )
+
+    # Delete old messages
+    old_ids = [r.id for r in to_summarize]
+    await db.execute(
+        delete(ConversationLog).where(ConversationLog.id.in_(old_ids))
+    )
+
+    # Insert summary record
+    summary_entry = ConversationLog(
+        user_id=user_id,
+        platform=platform,
+        session_id="summary",
+        role="summary",
+        content=summary_text,
+        tokens_estimate=estimate_tokens(summary_text),
+    )
+    db.add(summary_entry)
+    return summary_text
+
+
+def estimate_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
