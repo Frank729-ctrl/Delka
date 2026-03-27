@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}DelkaAI Console{% endblock %}</title>
+  <link rel="stylesheet" href="/static/console/console.css" />
+</head>
+<body class="light">
+
+<nav class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-logo">⬡</span>
+    <span class="brand-name">DelkaAI</span>
+    <span class="brand-badge">Console</span>
+  </div>
+  <div class="topbar-nav">
+    <a href="/console/overview"    {% if active == 'overview'    %}class="active"{% endif %}>Overview</a>
+    <a href="/console/keys"        {% if active == 'keys'        %}class="active"{% endif %}>API Keys</a>
+    <a href="/console/usage"       {% if active == 'usage'       %}class="active"{% endif %}>Usage</a>
+    <a href="/console/docs"        {% if active == 'docs'        %}class="active"{% endif %}>Docs</a>
+    <a href="/console/playground"  {% if active == 'playground'  %}class="active"{% endif %}>Playground</a>
+    <a href="/console/support"     {% if active == 'support'     %}class="active"{% endif %}>Support</a>
+  </div>
+  <div class="topbar-user">
+    {% if account %}
+    <span class="user-email">{{ account.email }}</span>
+    <a href="/console/logout" class="logout-link">Logout</a>
+    {% endif %}
+  </div>
+</nav>
+
+<main class="content">
+  {% block content %}{% endblock %}
+</main>
+
+<script src="/static/console/console.js"></script>
+</body>
+</html>

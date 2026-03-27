@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DelkaAI — Admin Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222637;
+    --border: #2e3347;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --orange: #f97316;
+    --blue: #3b82f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
+
+  /* ── LAYOUT ── */
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+  .topbar-brand { font-size: 16px; font-weight: 700; color: var(--accent2); letter-spacing: 0.5px; }
+  .topbar-meta { font-size: 11px; color: var(--muted); }
+  .content { max-width: 1400px; margin: 0 auto; padding: 24px 28px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 14px; }
+
+  /* ── CARDS ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; }
+  .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .card-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+  .card-value.accent { color: var(--accent2); }
+  .card-value.green { color: var(--green); }
+  .card-value.red { color: var(--red); }
+  .card-value.yellow { color: var(--yellow); }
+
+  /* ── CHART ── */
+  .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 28px; }
+  canvas { width: 100% !important; height: 180px !important; }
+
+  /* ── TABLES ── */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 28px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: var(--surface2); padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+  tbody td { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; vertical-align: middle; }
+  tbody tr:hover { background: var(--surface2); }
+
+  .badge { display: inline-block; border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .badge-blue { background: rgba(59,130,246,0.15); color: var(--blue); }
+
+  /* ── BUTTONS ── */
+  .btn { border: none; border-radius: 5px; padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.8; }
+  .btn-danger { background: rgba(239,68,68,0.2); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .btn-primary { background: rgba(99,102,241,0.2); color: var(--accent2); border: 1px solid rgba(99,102,241,0.3); }
+
+  /* ── SECURITY EVENTS ── */
+  .events-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 0; margin-bottom: 28px; max-height: 380px; overflow-y: auto; }
+  .event-row { padding: 9px 16px; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 11px; display: flex; gap: 12px; align-items: flex-start; }
+  .event-row:last-child { border-bottom: none; }
+  .event-severity { font-weight: 700; width: 70px; flex-shrink: 0; }
+  .sev-info { color: var(--blue); }
+  .sev-warning { color: var(--yellow); }
+  .sev-high { color: var(--orange); }
+  .sev-critical { color: var(--red); }
+  .event-ts { color: var(--muted); width: 160px; flex-shrink: 0; }
+  .event-type { color: var(--accent2); width: 160px; flex-shrink: 0; }
+  .event-detail { color: var(--text); opacity: 0.75; word-break: break-all; }
+
+  .empty { padding: 20px; color: var(--muted); text-align: center; font-size: 12px; }
+  .mono { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">⬡ DelkaAI Admin</div>
+  <div class="topbar-meta">v1.0.0 &nbsp;·&nbsp; Auto-refreshes every 30s</div>
+</div>
+
+<div class="content">
+
+  <!-- ── (a) OVERVIEW CARDS ── -->
+  <h2>Overview</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Total Requests</div>
+      <div class="card-value accent">{{ metrics.total_requests }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Active Keys</div>
+      <div class="card-value green">{{ keys | selectattr('is_active') | list | length }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Error Rate</div>
+      <div class="card-value {% if metrics.error_rate > 0.1 %}red{% elif metrics.error_rate > 0.05 %}yellow{% else %}green{% endif %}">
+        {{ "%.1f"|format(metrics.error_rate * 100) }}%
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Avg Response</div>
+      <div class="card-value">{{ metrics.avg_response_ms }}ms</div>
+    </div>
+    <div class="card">
+      <div class="card-label">LLM Calls</div>
+      <div class="card-value accent">{{ metrics.total_llm_calls }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Jailbreak Attempts</div>
+      <div class="card-value {% if metrics.jailbreak_attempts > 0 %}red{% else %}green{% endif %}">
+        {{ metrics.jailbreak_attempts }}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── (b) REQUESTS CHART ── -->
+  <h2>Endpoint Distribution</h2>
+  <div class="chart-wrap">
+    <canvas id="endpointChart"></canvas>
+  </div>
+
+  <!-- ── (c) API KEYS TABLE ── -->
+  <h2>API Keys ({{ keys | length }})</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Prefix</th>
+          <th>Type</th>
+          <th>Platform</th>
+          <th>Owner</th>
+          <th>Active</th>
+          <th>Flagged</th>
+          <th>Usage</th>
+          <th>Last Used</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for key in keys %}
+        <tr id="row-{{ key.raw_prefix }}">
+          <td><span class="mono">{{ key.raw_prefix }}</span></td>
+          <td>
+            <span class="badge {% if key.key_type == 'sk' %}badge-red{% else %}badge-blue{% endif %}">
+              {{ key.key_type | upper }}
+            </span>
+          </td>
+          <td>{{ key.platform }}</td>
+          <td>{{ key.owner }}</td>
+          <td>
+            <span class="badge {% if key.is_active %}badge-green{% else %}badge-red{% endif %}">
+              {{ 'YES' if key.is_active else 'NO' }}
+            </span>
+          </td>
+          <td>
+            {% if key.is_flagged %}
+            <span class="badge badge-yellow">FLAGGED</span>
+            {% else %}
+            <span style="color:var(--muted)">—</span>
+            {% endif %}
+          </td>
+          <td>{{ key.usage_count }}</td>
+          <td style="color:var(--muted)">
+            {% if key.last_used_at %}{{ key.last_used_at }}{% else %}Never{% endif %}
+          </td>
+          <td>
+            {% if key.is_active %}
+            <button class="btn btn-danger" onclick="revokeKey('{{ key.raw_prefix }}', '{{ master_key }}')">
+              Revoke
+            </button>
+            {% else %}
+            <span style="color:var(--muted);font-size:11px">Revoked</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="empty">No API keys found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── (d) SECURITY EVENTS ── -->
+  <h2>Security Events (last {{ events | length }})</h2>
+  <div class="events-wrap">
+    {% for ev in events %}
+    <div class="event-row">
+      <span class="event-severity sev-{{ ev.severity | lower }}">{{ ev.severity }}</span>
+      <span class="event-ts">{{ ev.timestamp[:19] if ev.timestamp else '' }}</span>
+      <span class="event-type">{{ ev.event_type }}</span>
+      <span class="event-detail">{{ ev.details | string | truncate(120) }}</span>
+    </div>
+    {% else %}
+    <div class="empty">No security events recorded.</div>
+    {% endfor %}
+  </div>
+
+  <!-- ── (e) BLOCKED IPs TABLE ── -->
+  <h2>Blocked IPs ({{ blocked_ips | length }})</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>IP Address</th>
+          <th>Reason</th>
+          <th>Blocked At</th>
+          <th>Expires At</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ip in blocked_ips %}
+        <tr id="ip-row-{{ loop.index }}">
+          <td><span class="mono">{{ ip.ip_address }}</span></td>
+          <td>{{ ip.reason }}</td>
+          <td style="color:var(--muted)">{{ ip.blocked_at[:19] if ip.blocked_at else '' }}</td>
+          <td style="color:var(--muted)">{{ ip.expires_at[:19] if ip.expires_at else 'Permanent' }}</td>
+          <td>
+            <button class="btn btn-primary" onclick="unblockIP('{{ ip.ip_address }}', '{{ master_key }}')">
+              Unblock
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">No blocked IPs.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /content -->
+
+<script>
+// ── AUTO-REFRESH ──
+setInterval(() => location.reload(), 30000);
+
+// ── ENDPOINT CHART ──
+(function() {
+  var endpoints = {{ metrics.endpoints | tojson }};
+  var labels = Object.keys(endpoints);
+  var values = Object.values(endpoints);
+
+  if (labels.length === 0) return;
+
+  var canvas = document.getElementById('endpointChart');
+  var ctx = canvas.getContext('2d');
+  var W = canvas.parentElement.offsetWidth - 40;
+  var H = 180;
+  canvas.width = W;
+  canvas.height = H;
+
+  var max = Math.max.apply(null, values) || 1;
+  var barW = Math.max(20, Math.floor((W - 60) / labels.length) - 8);
+  var gap = Math.floor((W - 60 - barW * labels.length) / (labels.length + 1));
+  var padLeft = 50;
+  var padBottom = 30;
+  var chartH = H - padBottom - 10;
+
+  ctx.fillStyle = '#1a1d27';
+  ctx.fillRect(0, 0, W, H);
+
+  // Y grid lines
+  ctx.strokeStyle = '#2e3347';
+  ctx.lineWidth = 1;
+  for (var g = 0; g <= 4; g++) {
+    var y = 10 + chartH - (g / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(padLeft, y); ctx.lineTo(W - 10, y); ctx.stroke();
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(Math.round(max * g / 4), 2, y + 4);
+  }
+
+  // Bars
+  labels.forEach(function(label, i) {
+    var x = padLeft + gap + i * (barW + gap);
+    var barH = (values[i] / max) * chartH;
+    var y = 10 + chartH - barH;
+    ctx.fillStyle = '#6366f1';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]) : ctx.rect(x, y, barW, barH);
+    ctx.fill();
+
+    // label
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '9px sans-serif';
+    ctx.save();
+    ctx.translate(x + barW / 2, H - 5);
+    ctx.rotate(-Math.PI / 6);
+    ctx.fillText(label.replace('/v1/', '/'), 0, 0);
+    ctx.restore();
+  });
+})();
+
+// ── REVOKE KEY ──
+async function revokeKey(prefix, masterKey) {
+  if (!confirm('Revoke key ' + prefix + '? This cannot be undone.')) return;
+  try {
+    var res = await fetch('/v1/admin/keys/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-DelkaAI-Master-Key': masterKey },
+      body: JSON.stringify({ key_prefix: prefix })
+    });
+    var data = await res.json();
+    if (res.ok) { location.reload(); }
+    else { alert('Error: ' + (data.detail || data.message)); }
+  } catch(e) { alert('Request failed: ' + e); }
+}
+
+// ── UNBLOCK IP ──
+async function unblockIP(ip, masterKey) {
+  if (!confirm('Unblock ' + ip + '?')) return;
+  try {
+    var res = await fetch('/v1/admin/unblock-ip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-DelkaAI-Master-Key': masterKey },
+      body: JSON.stringify({ ip_address: ip })
+    });
+    var data = await res.json();
+    if (res.ok) { location.reload(); }
+    else { alert('Error: ' + (data.detail || data.message)); }
+  } catch(e) { alert('Request failed: ' + e); }
+}
+</script>
+</body>
+</html>

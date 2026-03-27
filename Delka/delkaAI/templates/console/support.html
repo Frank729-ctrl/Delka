@@ -1,0 +1,120 @@
+{% extends "console/base.html" %}
+{% set active = "support" %}
+{% block title %}Support — DelkaAI Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Support</h1>
+  <p class="subtitle">Chat with the DelkaAI support bot, or reach out directly.</p>
+</div>
+
+<div class="support-grid">
+  <section class="panel chat-panel">
+    <h2>Live Support Chat</h2>
+    <div id="chatMessages" class="chat-messages">
+      <div class="chat-msg bot">
+        <span class="chat-avatar">⬡</span>
+        <span class="chat-bubble">Hi {{ account.full_name }}! I'm the DelkaAI support assistant. How can I help you today?</span>
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" class="form-control" placeholder="Ask anything about the API…" onkeydown="if(event.key==='Enter')sendChat()" />
+      <button class="btn btn-primary" onclick="sendChat()">Send</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Resources</h2>
+    <ul class="resource-list">
+      <li><a href="/console/docs">📖 API Reference</a></li>
+      <li><a href="/console/playground">🧪 Interactive Playground</a></li>
+      <li><a href="https://github.com/anthropics/claude-code/issues" target="_blank">🐛 Report a Bug</a></li>
+    </ul>
+
+    <h2 style="margin-top:24px">Common Questions</h2>
+    <div class="faq">
+      <details>
+        <summary>How do I authenticate API requests?</summary>
+        <p>Add the header <code>X-DelkaAI-Key: fd-delka-sk-…</code> to every request. Use your Secret Key for server-side calls.</p>
+      </details>
+      <details>
+        <summary>How do I get a PDF back synchronously vs via webhook?</summary>
+        <p>Omit <code>webhook_url</code> for a synchronous PDF response. Include it to get a <code>job_id</code> and receive the PDF as base64 at your webhook.</p>
+      </details>
+      <details>
+        <summary>What is the rate limit?</summary>
+        <p>Default: 30 requests/minute per key, 60 per IP. Contact admin to increase limits.</p>
+      </details>
+      <details>
+        <summary>Can I use the Publishable Key for CV generation?</summary>
+        <p>No. CV and Cover Letter generation require a Secret Key (sk-). Publishable Keys are for read-only or lightweight endpoints.</p>
+      </details>
+    </div>
+  </section>
+</div>
+
+<script>
+var SESSION_ID = 'console-' + Date.now();
+
+async function sendChat() {
+  var input = document.getElementById('chatInput');
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  appendMsg('user', msg);
+
+  var botEl = appendMsg('bot', '…');
+
+  try {
+    var resp = await fetch('/v1/support/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: SESSION_ID,
+        message: msg,
+        platform: 'console',
+        language: 'en'
+      })
+    });
+
+    if (!resp.ok) {
+      botEl.querySelector('.chat-bubble').textContent = 'Sorry, I encountered an error. Please try again.';
+      return;
+    }
+
+    var reader = resp.body.getReader();
+    var decoder = new TextDecoder();
+    var bubble = botEl.querySelector('.chat-bubble');
+    bubble.textContent = '';
+
+    while (true) {
+      var result = await reader.read();
+      if (result.done) break;
+      var chunk = decoder.decode(result.value);
+      chunk.split('\n').forEach(function(line) {
+        if (line.startsWith('data: ')) {
+          var token = line.slice(6);
+          if (token !== '[DONE]' && token !== '[ERROR]') bubble.textContent += token;
+        }
+      });
+    }
+  } catch(e) {
+    botEl.querySelector('.chat-bubble').textContent = 'Network error. Please check your connection.';
+  }
+}
+
+function appendMsg(role, text) {
+  var msgs = document.getElementById('chatMessages');
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.innerHTML = '<span class="chat-avatar">' + (role === 'bot' ? '⬡' : '👤') + '</span>' +
+                  '<span class="chat-bubble">' + escapeHtml(text) + '</span>';
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}

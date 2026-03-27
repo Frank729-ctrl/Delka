@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 20mm 28mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10.5px; color: {{ color.text }}; background: #fff; line-height: 1.7; }
+
+  .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .lh-left { }
+  .lh-name { font-size: 16px; font-weight: 700; color: {{ color.primary }}; margin-bottom: 3px; }
+  .lh-contact { font-size: 9px; color: #777; line-height: 1.6; }
+  .lh-date { font-size: 10px; color: #555; text-align: right; padding-top: 4px; }
+
+  .rule { height: 2px; background: {{ color.secondary }}; margin-bottom: 20px; }
+
+  .recipient { margin-bottom: 18px; font-size: 10.5px; color: {{ color.text }}; }
+  .recipient .company { font-weight: 700; }
+
+  .salutation { margin-bottom: 14px; font-size: 10.5px; font-style: italic; }
+
+  .body p { margin-bottom: 13px; font-size: 10.5px; line-height: 1.75; text-align: justify; }
+
+  .closing { margin-top: 22px; font-size: 10.5px; }
+  .closing-line { margin-bottom: 24px; }
+  .closing-name { font-weight: 700; color: {{ color.primary }}; font-size: 11px; }
+</style>
+</head>
+<body>
+
+  <div class="letterhead">
+    <div class="lh-left">
+      <div class="lh-name">{{ letter.applicant_name }}</div>
+    </div>
+    <div class="lh-date">{{ letter.date }}</div>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="recipient">
+    <div>Hiring Manager</div>
+    <div class="company">{{ letter.company_name }}</div>
+    <div>Re: Application for {{ letter.job_title }}</div>
+  </div>
+
+  <div class="salutation">Dear Hiring Manager,</div>
+
+  <div class="body">
+    {% for para in letter.paragraphs %}
+    <p>{{ para }}</p>
+    {% endfor %}
+  </div>
+
+  <div class="closing">
+    <div class="closing-line">Yours sincerely,</div>
+    <div class="closing-name">{{ letter.applicant_name }}</div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,54 @@
+{% extends "admin/base.html" %}
+{% set active = "security" %}
+{% block title %}Security — DelkaAI Admin{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Security</h1></div>
+
+<section class="panel">
+  <h2>Blocked IPs ({{ blocked_ips | length }})</h2>
+  <table class="data-table">
+    <thead>
+      <tr><th>IP Address</th><th>Reason</th><th>Blocked At</th><th>Expires</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+    {% for ip in blocked_ips %}
+    <tr>
+      <td class="mono">{{ ip.ip_address }}</td>
+      <td>{{ ip.reason }}</td>
+      <td class="muted">{{ ip.blocked_at[:19] if ip.blocked_at else "" }}</td>
+      <td class="muted">{{ ip.expires_at[:19] if ip.expires_at else "Permanent" }}</td>
+      <td>
+        <form method="post" action="/admin/security/unblock" style="display:inline">
+          <input type="hidden" name="ip_address" value="{{ ip.ip_address }}" />
+          <button type="submit" class="btn btn-primary">Unblock</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="empty">No blocked IPs.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Recent Security Events ({{ events | length }})</h2>
+  <table class="data-table">
+    <thead>
+      <tr><th>Time</th><th>Event</th><th>Level</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+    {% for ev in events %}
+    <tr>
+      <td class="mono muted">{{ ev.timestamp[:19] if ev.timestamp else "" }}</td>
+      <td>{{ ev.event_type }}</td>
+      <td><span class="badge badge-{{ ev.severity | lower }}">{{ ev.severity }}</span></td>
+      <td class="muted small">{{ ev.details | string | truncate(100) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="empty">No events.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

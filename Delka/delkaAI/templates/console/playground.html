@@ -1,0 +1,221 @@
+{% extends "console/base.html" %}
+{% set active = "playground" %}
+{% block title %}Playground — DelkaAI Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Playground</h1>
+  <p class="subtitle">Test the API interactively using your secret keys.</p>
+</div>
+
+<div class="playground-grid">
+  <section class="panel playground-input">
+    <h2>Request</h2>
+
+    <div class="form-group">
+      <label>API Key</label>
+      <select id="keySelect" class="form-control">
+        {% for k in sk_keys %}
+        <option value="{{ k.raw_prefix }}">{{ k.raw_prefix }} ({{ k.platform }})</option>
+        {% else %}
+        <option value="">No active secret keys — contact admin</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Endpoint</label>
+      <select id="endpointSelect" class="form-control" onchange="updatePayload()">
+        <option value="/v1/cv/generate">POST /v1/cv/generate</option>
+        <option value="/v1/cover-letter/generate">POST /v1/cover-letter/generate</option>
+        <option value="/v1/support/chat">POST /v1/support/chat (stream)</option>
+        <option value="/v1/health">GET /v1/health</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>JSON Payload</label>
+      <textarea id="payloadInput" class="code-textarea" rows="18" spellcheck="false"></textarea>
+    </div>
+
+    <button class="btn btn-primary" onclick="sendRequest()">Send Request</button>
+    <button class="btn btn-sm" onclick="formatPayload()">Format JSON</button>
+  </section>
+
+  <section class="panel playground-output">
+    <h2>Response</h2>
+    <div id="statusBar" class="status-bar"></div>
+    <pre id="responseOutput" class="response-pre"></pre>
+    <div id="pdfPreview" style="display:none">
+      <h3 class="sub-heading">PDF Preview</h3>
+      <canvas id="pdfCanvas" style="max-width:100%;border:1px solid #e2e8f0;border-radius:4px;"></canvas>
+    </div>
+  </section>
+</div>
+
+<script>
+var PAYLOADS = {
+  '/v1/cv/generate': JSON.stringify({
+    full_name: "Jane Smith",
+    email: "jane@example.com",
+    phone: "+1-555-0100",
+    location: "New York, NY",
+    summary: "Senior software engineer with 8 years of experience in Python and distributed systems.",
+    experience: [{
+      company: "Acme Corp",
+      title: "Senior Engineer",
+      start_date: "2020-01",
+      end_date: "present",
+      bullets: ["Led microservices migration reducing latency by 40%", "Mentored 5 junior engineers"]
+    }],
+    education: [{ school: "MIT", degree: "BSc Computer Science", year: "2016" }],
+    skills: ["Python", "FastAPI", "PostgreSQL", "Docker"],
+    template: "bold_header",
+    color: "professional_blue"
+  }, null, 2),
+  '/v1/cover-letter/generate': JSON.stringify({
+    applicant_name: "Jane Smith",
+    applicant_email: "jane@example.com",
+    company_name: "TechCorp",
+    role_title: "Senior Engineer",
+    body_paragraphs: [
+      "I am excited to apply for the Senior Engineer role at TechCorp.",
+      "My 8 years of experience in Python and distributed systems makes me a strong fit."
+    ],
+    template: "formal_letterhead",
+    color: "professional_blue"
+  }, null, 2),
+  '/v1/support/chat': JSON.stringify({
+    session_id: "playground-" + Date.now(),
+    message: "What CV templates do you support?",
+    platform: "playground",
+    language: "en"
+  }, null, 2),
+  '/v1/health': ''
+};
+
+function updatePayload() {
+  var ep = document.getElementById('endpointSelect').value;
+  document.getElementById('payloadInput').value = PAYLOADS[ep] || '';
+}
+
+function formatPayload() {
+  var ta = document.getElementById('payloadInput');
+  try {
+    ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+  } catch(e) {
+    showStatus('Invalid JSON: ' + e.message, 'error');
+  }
+}
+
+function showStatus(msg, type) {
+  var bar = document.getElementById('statusBar');
+  bar.textContent = msg;
+  bar.className = 'status-bar status-' + type;
+}
+
+async function sendRequest() {
+  var ep = document.getElementById('endpointSelect').value;
+  var keyPrefix = document.getElementById('keySelect').value;
+  var payload = document.getElementById('payloadInput').value;
+  var output = document.getElementById('responseOutput');
+  var pdfDiv = document.getElementById('pdfPreview');
+
+  pdfDiv.style.display = 'none';
+  output.textContent = 'Sending…';
+  showStatus('', '');
+
+  var opts = {
+    method: ep === '/v1/health' ? 'GET' : 'POST',
+    headers: { 'X-DelkaAI-Key': keyPrefix }
+  };
+  if (payload && opts.method === 'POST') {
+    opts.headers['Content-Type'] = 'application/json';
+    try { JSON.parse(payload); } catch(e) { showStatus('Invalid JSON', 'error'); return; }
+    opts.body = payload;
+  }
+
+  // Streaming support for support chat
+  if (ep === '/v1/support/chat') {
+    output.textContent = '';
+    try {
+      var resp = await fetch(ep, opts);
+      showStatus(resp.status + ' ' + resp.statusText, resp.ok ? 'ok' : 'error');
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      while (true) {
+        var result = await reader.read();
+        if (result.done) break;
+        var chunk = decoder.decode(result.value);
+        // SSE lines: "data: token\n\n"
+        chunk.split('\n').forEach(function(line) {
+          if (line.startsWith('data: ')) {
+            var token = line.slice(6);
+            if (token !== '[DONE]' && token !== '[ERROR]') output.textContent += token;
+          }
+        });
+      }
+    } catch(e) { showStatus('Error: ' + e.message, 'error'); }
+    return;
+  }
+
+  try {
+    var startMs = Date.now();
+    var resp = await fetch(ep, opts);
+    var ms = Date.now() - startMs;
+    showStatus(resp.status + ' ' + resp.statusText + '  (' + ms + 'ms)', resp.ok ? 'ok' : 'error');
+
+    var ct = resp.headers.get('content-type') || '';
+    if (ct.includes('application/pdf')) {
+      var buf = await resp.arrayBuffer();
+      output.textContent = '(PDF received — ' + buf.byteLength + ' bytes)';
+      renderPdfPreview(buf);
+      return;
+    }
+
+    var text = await resp.text();
+    try {
+      var data = JSON.parse(text);
+      // Show PDF preview if base64 present
+      if (data.data && data.data.pdf_base64) {
+        var binStr = atob(data.data.pdf_base64);
+        var bytes = new Uint8Array(binStr.length);
+        for (var i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        renderPdfPreview(bytes.buffer);
+      }
+      output.textContent = JSON.stringify(data, null, 2);
+    } catch(_) { output.textContent = text; }
+  } catch(e) {
+    showStatus('Network error: ' + e.message, 'error');
+    output.textContent = e.message;
+  }
+}
+
+function renderPdfPreview(arrayBuffer) {
+  // Minimal PDF page render: draw first ~page as scaled canvas placeholder
+  var pdfDiv = document.getElementById('pdfPreview');
+  var canvas = document.getElementById('pdfCanvas');
+  var ctx = canvas.getContext('2d');
+  canvas.width = 595; canvas.height = 842;  // A4 72dpi approx
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, 595, 842);
+  ctx.fillStyle = '#6366f1';
+  ctx.font = '14px sans-serif';
+  ctx.fillText('PDF received (' + (arrayBuffer.byteLength / 1024).toFixed(1) + ' KB)', 20, 40);
+  ctx.fillStyle = '#64748b';
+  ctx.font = '12px sans-serif';
+  ctx.fillText('Full PDF rendered server-side. Download to view.', 20, 70);
+  pdfDiv.style.display = 'block';
+
+  // Offer download
+  var blob = new Blob([arrayBuffer], {type: 'application/pdf'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'preview.pdf'; a.textContent = 'Download PDF';
+  a.className = 'btn btn-sm'; a.style.display = 'inline-block';
+  pdfDiv.appendChild(a);
+}
+
+// Init
+updatePayload();
+</script>
+{% endblock %}

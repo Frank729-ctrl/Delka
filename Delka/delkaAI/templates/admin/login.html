@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DelkaAI Admin Login</title>
+  <link rel="stylesheet" href="/static/admin/admin.css" />
+</head>
+<body class="dark login-page">
+  <div class="login-card">
+    <div class="login-logo">⬡ DelkaAI</div>
+    <h1>Admin Console</h1>
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/admin/login">
+      <label for="master_key">Master Key</label>
+      <input type="password" id="master_key" name="master_key" placeholder="fd-delka-mk-…" required autofocus />
+      <button type="submit" class="btn btn-primary">Sign In</button>
+    </form>
+  </div>
+</body>
+</html>

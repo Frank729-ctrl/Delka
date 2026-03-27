@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}DelkaAI Admin{% endblock %}</title>
+  <link rel="stylesheet" href="/static/admin/admin.css" />
+</head>
+<body class="dark">
+
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-logo">⬡</span>
+    <span class="brand-name">DelkaAI</span>
+    <span class="brand-badge">Admin</span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="/admin/keys"      {% if active == 'keys'      %}class="active"{% endif %}>API Keys</a></li>
+    <li><a href="/admin/security"  {% if active == 'security'  %}class="active"{% endif %}>Security</a></li>
+    <li><a href="/admin/metrics"   {% if active == 'metrics'   %}class="active"{% endif %}>Metrics</a></li>
+    <li><a href="/admin/providers" {% if active == 'providers' %}class="active"{% endif %}>Providers</a></li>
+    <li><a href="/admin/platforms" {% if active == 'platforms' %}class="active"{% endif %}>Platforms</a></li>
+    <li><a href="/admin/webhooks"  {% if active == 'webhooks'  %}class="active"{% endif %}>Webhooks</a></li>
+    <li><a href="/admin/settings"  {% if active == 'settings'  %}class="active"{% endif %}>Settings</a></li>
+  </ul>
+  <div class="sidebar-footer">
+    <a href="/admin/logout" class="logout-link">Logout</a>
+  </div>
+</nav>
+
+<main class="content">
+  {% block content %}{% endblock %}
+</main>
+
+<script src="/static/admin/admin.js"></script>
+</body>
+</html>

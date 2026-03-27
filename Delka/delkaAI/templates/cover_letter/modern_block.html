@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 20mm 24mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10.5px; color: {{ color.text }}; background: #fff; line-height: 1.7; }
+
+  .wrapper {
+    border-left: 4px solid {{ color.secondary }};
+    padding-left: 20px;
+  }
+
+  .header { margin-bottom: 18px; }
+  .applicant-name { font-size: 24px; font-weight: 700; color: {{ color.secondary }}; margin-bottom: 3px; }
+  .meta { font-size: 11px; color: #888; }
+
+  .date-line { font-size: 10px; color: #777; margin-bottom: 16px; }
+
+  .body p { margin-bottom: 13px; font-size: 10.5px; line-height: 1.75; }
+
+  .closing { margin-top: 22px; font-size: 10.5px; }
+  .closing-line { margin-bottom: 20px; color: #555; }
+  .closing-name { font-weight: 700; color: {{ color.secondary }}; font-size: 12px; }
+</style>
+</head>
+<body>
+
+  <div class="wrapper">
+
+    <div class="header">
+      <div class="applicant-name">{{ letter.applicant_name }}</div>
+      <div class="meta">{{ letter.job_title }} &nbsp;·&nbsp; {{ letter.company_name }}</div>
+    </div>
+
+    <div class="date-line">{{ letter.date }}</div>
+
+    <div class="body">
+      {% for para in letter.paragraphs %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="closing">
+      <div class="closing-line">Best regards,</div>
+      <div class="closing-name">{{ letter.applicant_name }}</div>
+    </div>
+
+  </div>
+
+</body>
+</html>

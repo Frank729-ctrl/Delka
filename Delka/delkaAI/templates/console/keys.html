@@ -1,0 +1,43 @@
+{% extends "console/base.html" %}
+{% set active = "keys" %}
+{% block title %}API Keys — DelkaAI Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>API Keys</h1>
+  <p class="subtitle">Contact your account admin to create or revoke keys.</p>
+</div>
+
+<section class="panel">
+  <h2>Your Keys ({{ keys | length }})</h2>
+  <table class="data-table">
+    <thead>
+      <tr><th>Prefix</th><th>Type</th><th>Platform</th><th>Status</th><th>Usage</th><th>Last Used</th></tr>
+    </thead>
+    <tbody>
+    {% for k in keys %}
+    <tr>
+      <td class="mono">{{ k.raw_prefix }}</td>
+      <td><span class="badge badge-{% if k.key_type == 'sk' %}warning{% else %}info{% endif %}">{{ k.key_type | upper }}</span></td>
+      <td>{{ k.platform }}</td>
+      <td>{% if k.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-error">Revoked</span>{% endif %}</td>
+      <td>{{ k.usage_count }}</td>
+      <td class="muted">{{ k.last_used_at or "Never" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">No keys assigned to your account yet. Contact admin.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Key Types Explained</h2>
+  <table class="data-table">
+    <thead><tr><th>Type</th><th>Prefix</th><th>Usage</th></tr></thead>
+    <tbody>
+      <tr><td>Publishable Key</td><td class="mono">fd-delka-pk-…</td><td>Client-side, limited endpoints</td></tr>
+      <tr><td>Secret Key</td><td class="mono">fd-delka-sk-…</td><td>Server-side only, full access</td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
