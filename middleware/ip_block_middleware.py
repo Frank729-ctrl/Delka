@@ -4,12 +4,14 @@ from starlette.responses import JSONResponse, Response
 from database import AsyncSessionLocal
 from security.ip_blocker import is_ip_blocked
 
-_SKIP_PATHS = {"/v1/health", "/admin/login", "/admin/logout", "/console/login", "/console/register"}
+_SKIP_PATHS = {"/v1/health"}
+_SKIP_PREFIXES = ("/admin/", "/console/")
 
 
 class IPBlockMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.url.path in _SKIP_PATHS:
+        path = request.url.path
+        if path in _SKIP_PATHS or any(path.startswith(p) for p in _SKIP_PREFIXES):
             return await call_next(request)
 
         ip = request.client.host if request.client else "unknown"
