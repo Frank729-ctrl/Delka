@@ -133,6 +133,12 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+# ── ROOT ─────────────────────────────────────────────────────────────────────
+@app.get("/")
+async def root():
+    return {"name": "DelkaAI API", "version": "1.0.0", "docs": "/v1/health"}
+
+
 # ── STATIC FILES ────────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

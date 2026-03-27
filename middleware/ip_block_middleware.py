@@ -4,7 +4,7 @@ from starlette.responses import JSONResponse, Response
 from database import AsyncSessionLocal
 from security.ip_blocker import is_ip_blocked
 
-_SKIP_PATHS = {"/v1/health"}
+_SKIP_PATHS = {"/v1/health", "/admin/login", "/admin/logout", "/console/login", "/console/register"}
 
 
 class IPBlockMiddleware(BaseHTTPMiddleware):

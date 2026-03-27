@@ -30,7 +30,7 @@ async def honeypot(path: str, request: Request):
                 ip=ip,
                 reason=f"honeypot: {method} /{path}",
                 db=db,
-                duration_hours=None,  # permanent
+                duration_hours=24,
             )
     except Exception:
         pass
