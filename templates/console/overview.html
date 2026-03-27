@@ -1,0 +1,47 @@
+{% extends "console/base.html" %}
+{% set active = "overview" %}
+{% block title %}Overview — DelkaAI Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Welcome, {{ account.full_name }}</h1>
+  <p class="subtitle">{{ account.email }}</p>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Keys</div>
+    <div class="stat-value">{{ overview.total_keys }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active Keys</div>
+    <div class="stat-value success">{{ overview.active_keys }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Requests</div>
+    <div class="stat-value">{{ overview.total_requests }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg Response (ms)</div>
+    <div class="stat-value">{{ overview.avg_response_ms | round(1) }}</div>
+  </div>
+</div>
+
+<section class="panel">
+  <h2>Quick Start</h2>
+  <ol class="quickstart-list">
+    <li>Go to <a href="/console/keys">API Keys</a> and request a key pair from the admin.</li>
+    <li>Use your <strong>Secret Key</strong> (sk-) in the <code>X-DelkaAI-Key</code> header.</li>
+    <li>Call <code>POST /v1/cv/generate</code> with your CV payload.</li>
+    <li>Check the <a href="/console/playground">Playground</a> to test interactively.</li>
+    <li>See <a href="/console/docs">Docs</a> for full API reference.</li>
+  </ol>
+</section>
+
+<section class="panel">
+  <h2>API Base URL</h2>
+  <div class="code-block">
+    <code id="baseUrl">https://api.delkaai.com</code>
+    <button class="btn btn-sm" onclick="copyText(document.getElementById('baseUrl').textContent)">Copy</button>
+  </div>
+</section>
+{% endblock %}

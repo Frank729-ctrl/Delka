@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register — DelkaAI Console</title>
+  <link rel="stylesheet" href="/static/console/console.css" />
+</head>
+<body class="light auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">⬡ DelkaAI</div>
+    <h1>Create Account</h1>
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/console/register">
+      <div class="form-group">
+        <label for="full_name">Full Name</label>
+        <input type="text" id="full_name" name="full_name" placeholder="Jane Smith" required />
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="jane@company.com" required />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="Min 8 characters" required minlength="8" />
+      </div>
+      <div class="form-group">
+        <label for="company">Company (optional)</label>
+        <input type="text" id="company" name="company" placeholder="Acme Inc." />
+      </div>
+      <button type="submit" class="btn btn-primary full-width">Create Account</button>
+    </form>
+    <div class="auth-footer">
+      Already have an account? <a href="/console/login">Sign in</a>
+    </div>
+  </div>
+</body>
+</html>

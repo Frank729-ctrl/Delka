@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 28mm 32mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, 'Times New Roman', serif; font-size: 11px; color: {{ color.text }}; background: #fff; line-height: 1.8; }
+
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .applicant-name { font-size: 14px; font-weight: 700; color: {{ color.secondary }}; }
+  .date { font-size: 10px; color: #888; }
+
+  .rule { height: 1px; background: #ccc; margin-bottom: 22px; }
+
+  .body p { margin-bottom: 16px; font-size: 11px; line-height: 1.8; text-align: justify; }
+
+  .closing { margin-top: 26px; font-size: 11px; }
+  .closing-line { margin-bottom: 22px; color: #555; }
+  .closing-name { font-weight: 700; font-size: 11.5px; }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <span class="applicant-name">{{ letter.applicant_name }}</span>
+    <span class="date">{{ letter.date }}</span>
+  </div>
+  <div class="rule"></div>
+
+  <div class="body">
+    {% for para in letter.paragraphs %}
+    <p>{{ para }}</p>
+    {% endfor %}
+  </div>
+
+  <div class="closing">
+    <div class="closing-line">Sincerely,</div>
+    <div class="closing-name">{{ letter.applicant_name }}</div>
+  </div>
+
+</body>
+</html>
