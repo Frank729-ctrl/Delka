@@ -14,6 +14,8 @@ from typing import AsyncGenerator
 # ── Override settings before app imports ────────────────────────────────────
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SECRET_MASTER_KEY", "fd-delka-mk-testkey0000000000000000")
+os.environ.setdefault("ADMIN_EMAIL", "admin@test.com")
+os.environ.setdefault("ADMIN_PASSWORD", "testpassword123")
 os.environ.setdefault("ARGON2_TIME_COST", "1")
 os.environ.setdefault("ARGON2_MEMORY_COST", "8192")
 os.environ.setdefault("ARGON2_PARALLELISM", "1")
