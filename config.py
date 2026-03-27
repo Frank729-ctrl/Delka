@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     VISION_MAX_IMAGE_SIZE_MB: int = 10
     VISION_INDEX_BATCH_SIZE: int = 100
 
+    # Resend email
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "noreply@delkaai.com"
+
     # Misc
     LLM_MAX_RETRIES: int = 2
     WEBHOOK_TIMEOUT_SECONDS: int = 10
