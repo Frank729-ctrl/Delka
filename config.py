@@ -78,7 +78,7 @@ class Settings(BaseSettings):
 
     # Resend email
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "noreply@delkaai.com"
+    RESEND_FROM_EMAIL: str = "support@snafrate.com"
 
     # Misc
     LLM_MAX_RETRIES: int = 2
