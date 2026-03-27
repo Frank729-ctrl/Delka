@@ -4,8 +4,10 @@ from pydantic import BaseModel
 from typing import Optional
 
 from database import AsyncSessionLocal
+from config import settings
 from services.developer_auth_service import (
-    register_developer, login_developer, get_session, logout_developer
+    register_developer, login_developer, get_session, logout_developer,
+    clerk_provision_developer,
 )
 from services.console_service import get_developer_overview, get_developer_keys
 
@@ -80,6 +82,24 @@ async def developer_overview(x_delkai_session: str | None = Header(default=None)
     async with AsyncSessionLocal() as db:
         overview = await get_developer_overview(account.email, db)
     return overview
+
+
+class ClerkProvisionRequest(BaseModel):
+    email: str
+    full_name: str
+    clerk_id: str
+
+
+@router.post("/clerk-provision", include_in_schema=False)
+async def developer_clerk_provision(
+    body: ClerkProvisionRequest,
+    x_delkaai_master_key: str | None = Header(default=None),
+):
+    if not x_delkaai_master_key or x_delkaai_master_key != settings.SECRET_MASTER_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden.")
+    async with AsyncSessionLocal() as db:
+        result = await clerk_provision_developer(body.email, body.full_name, body.clerk_id, db)
+    return result
 
 
 @router.get("/keys")

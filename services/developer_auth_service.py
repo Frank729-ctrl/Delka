@@ -99,6 +99,47 @@ async def get_session(token: str, db: AsyncSession) -> DeveloperAccount | None:
     return acc_result.scalar_one_or_none()
 
 
+async def clerk_provision_developer(
+    email: str,
+    full_name: str,
+    clerk_id: str,
+    db: AsyncSession,
+) -> dict:
+    """Find or create a developer account for a Clerk-authenticated user and return a session."""
+    email = email.lower()
+    result = await db.execute(
+        select(DeveloperAccount).where(DeveloperAccount.email == email)
+    )
+    account = result.scalar_one_or_none()
+
+    if account is None:
+        account = DeveloperAccount(
+            email=email,
+            password_hash="CLERK:" + clerk_id,
+            full_name=full_name,
+            is_active=True,
+            is_verified=True,
+        )
+        db.add(account)
+        await db.flush()
+        request_logger.info(f"developer_auth: clerk_provision created email={email}")
+
+    account.last_login_at = datetime.utcnow()
+
+    token = secrets.token_hex(64)
+    expires_at = datetime.utcnow() + timedelta(hours=_SESSION_TTL_HOURS)
+    session = DeveloperSession(
+        session_token=token,
+        developer_id=account.id,
+        expires_at=expires_at,
+    )
+    db.add(session)
+    await db.commit()
+
+    request_logger.info(f"developer_auth: clerk_provision session created email={email}")
+    return {"session_token": token, "expires_at": expires_at.isoformat()}
+
+
 async def logout_developer(token: str, db: AsyncSession) -> bool:
     result = await db.execute(
         select(DeveloperSession).where(DeveloperSession.session_token == token)
