@@ -14,6 +14,11 @@ from services.console_service import get_developer_overview, get_developer_keys
 router = APIRouter(prefix="/v1/developer", tags=["Developer API"])
 
 
+@router.get("/ping")
+async def developer_ping():
+    return {"developer_router": "ok"}
+
+
 class RegisterRequest(BaseModel):
     email: str
     password: str
