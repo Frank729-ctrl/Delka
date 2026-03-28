@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import time
 from fastapi.responses import StreamingResponse
 from schemas.support_schema import SupportChatRequest
@@ -104,6 +105,7 @@ async def handle_chat(data: SupportChatRequest, db=None) -> StreamingResponse:
                 model_used="",
                 response_ms=response_ms,
                 db=db,
+                system_prompt_hash=hashlib.sha256(system_prompt.encode()).hexdigest(),
             )
             updates = await extract_profile_updates(data.message, full_response, profile)
             await update_profile(data.user_id, data.platform, updates, db)

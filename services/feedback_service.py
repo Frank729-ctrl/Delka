@@ -5,6 +5,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from schemas.feedback_schema import FeedbackRequest, FeedbackResponse, FeedbackSummary
 
 
+def is_training_eligible(log) -> bool:
+    """Return True only if this interaction is high quality and suitable for fine-tuning."""
+    if log.rating is None or log.rating < 4:
+        return False
+    if log.correction:
+        return False
+    response_text = str(log.response_data)
+    if len(response_text) < 200:
+        return False
+    if log.auto_score is not None and log.auto_score < 0.65:
+        return False
+    return True
+
+
 async def store_feedback_log(
     user_id: str,
     platform: str,
@@ -18,6 +32,8 @@ async def store_feedback_log(
     db: AsyncSession,
     auto_score: float | None = None,
     auto_score_issues: list | None = None,
+    system_prompt_hash: str | None = None,
+    thinking_tokens: str | None = None,
 ) -> None:
     from models.feedback_log_model import FeedbackLog
 
@@ -27,7 +43,9 @@ async def store_feedback_log(
         session_id=session_id,
         service=service,
         request_data=request_data,
+        system_prompt_hash=system_prompt_hash,
         response_data=response_data,
+        thinking_tokens=thinking_tokens,
         provider_used=provider_used,
         model_used=model_used,
         response_ms=response_ms,
@@ -168,26 +186,124 @@ async def get_feedback_summary(
     ]
 
 
+def _build_prompt_text(log) -> str:
+    """Reconstruct a human-readable prompt string from stored request_data."""
+    import json
+    svc = log.service or ""
+    if svc == "cv":
+        return f"Generate a professional CV:\n{json.dumps(log.request_data, ensure_ascii=False)}"
+    if svc == "letter":
+        return f"Write a cover letter:\n{json.dumps(log.request_data, ensure_ascii=False)}"
+    if svc in ("chat", "support"):
+        return log.request_data.get("message", json.dumps(log.request_data))
+    return json.dumps(log.request_data, ensure_ascii=False)
+
+
+def _build_completion_text(log) -> str:
+    """Reconstruct the completion string from stored response_data."""
+    import json
+    svc = log.service or ""
+    if svc == "cv":
+        return json.dumps(log.response_data, ensure_ascii=False)
+    if svc in ("letter", "chat", "support"):
+        return log.response_data.get("response") or log.response_data.get("letter_text") or json.dumps(log.response_data, ensure_ascii=False)
+    return json.dumps(log.response_data, ensure_ascii=False)
+
+
 async def export_training_data(
-    platform: str,
     db: AsyncSession,
+    platform: str | None = None,
+    service: str | None = None,
     min_rating: int = 4,
 ) -> list[dict]:
     from models.feedback_log_model import FeedbackLog
 
-    result = await db.execute(
-        select(FeedbackLog).where(
-            FeedbackLog.platform == platform,
-            FeedbackLog.rating >= min_rating,
-        )
-    )
+    query = select(FeedbackLog)
+    if platform:
+        query = query.where(FeedbackLog.platform == platform)
+    if service:
+        query = query.where(FeedbackLog.service == service)
+    query = query.order_by(FeedbackLog.created_at.desc())
+
+    result = await db.execute(query)
     rows = result.scalars().all()
-    return [
-        {
-            "prompt": str(r.request_data),
-            "completion": str(r.response_data),
+
+    out = []
+    for r in rows:
+        if not is_training_eligible(r):
+            continue
+        out.append({
+            "prompt": _build_prompt_text(r),
+            "completion": _build_completion_text(r),
             "rating": r.rating,
             "platform": r.platform,
-        }
-        for r in rows
-    ]
+            "service": r.service,
+            "model": r.model_used or "",
+            "auto_score": r.auto_score,
+        })
+    return out
+
+
+async def get_training_stats(
+    db: AsyncSession,
+    platform: str | None = None,
+) -> dict:
+    from models.feedback_log_model import FeedbackLog
+    from sqlalchemy import and_, or_
+
+    query = select(FeedbackLog)
+    if platform:
+        query = query.where(FeedbackLog.platform == platform)
+
+    result = await db.execute(query)
+    rows = result.scalars().all()
+
+    services = ["cv", "letter", "chat", "support", "vision"]
+    by_service: dict = {s: {"total": 0, "rated": 0, "high_quality": 0} for s in services}
+    total = rated = high_quality = 0
+    score_sum = score_count = rating_sum = rating_count = 0
+
+    for r in rows:
+        svc = r.service or "other"
+        bucket = by_service.setdefault(svc, {"total": 0, "rated": 0, "high_quality": 0})
+
+        total += 1
+        bucket["total"] += 1
+
+        if r.rating is not None:
+            rated += 1
+            bucket["rated"] += 1
+            rating_sum += r.rating
+            rating_count += 1
+
+        if is_training_eligible(r):
+            high_quality += 1
+            bucket["high_quality"] += 1
+
+        if r.auto_score is not None:
+            score_sum += r.auto_score
+            score_count += 1
+
+    _THRESHOLD = 300
+    ready = high_quality >= _THRESHOLD
+
+    if not ready and rated > 0:
+        rate_per_day = rated / max(1, (rows[-1].created_at - rows[0].created_at).days or 1) if len(rows) > 1 else 1
+        weeks_needed = max(0, (_THRESHOLD - high_quality) / max(1, rate_per_day * 7))
+        readiness = f"~{int(weeks_needed)} weeks at current rate"
+    elif ready:
+        readiness = "ready"
+    else:
+        readiness = "not enough data yet"
+
+    return {
+        "total_interactions": total,
+        "rated_interactions": rated,
+        "high_quality": high_quality,
+        "by_service": {k: v for k, v in by_service.items() if v["total"] > 0},
+        "fine_tuning_ready": ready,
+        "fine_tuning_threshold": _THRESHOLD,
+        "estimated_readiness": readiness,
+        "avg_auto_score": round(score_sum / score_count, 3) if score_count else None,
+        "avg_user_rating": round(rating_sum / rating_count, 2) if rating_count else None,
+    }

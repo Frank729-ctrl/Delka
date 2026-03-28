@@ -54,11 +54,35 @@ async def generate_full_response(
     user_prompt: str,
     temperature: float = 0.7,
     max_tokens: int = 4096,
+    user_id: str = "",
 ) -> tuple[str, str, str]:
     """
     Tries each provider in the task chain until one succeeds.
+    Checks A/B test assignment first when user_id is provided.
     Returns: (response_text, provider_name, model_name)
     """
+    # A/B test override — checked before normal chain
+    if user_id:
+        from services.ab_test_service import get_model_for_user
+        ab_assignment = get_model_for_user(task, user_id)
+        if ab_assignment:
+            ab_provider_name, ab_model = ab_assignment
+            ab_provider = PROVIDER_INSTANCES.get(ab_provider_name)
+            if ab_provider and ab_provider.is_available():
+                try:
+                    text = await ab_provider.generate_full(
+                        system_prompt, user_prompt, ab_model, temperature, max_tokens
+                    )
+                    return text, ab_provider_name, ab_model
+                except Exception as e:
+                    log_security_event(
+                        severity="WARNING",
+                        event_type="ab_test_provider_error",
+                        details={"task": task, "provider": ab_provider_name,
+                                 "model": ab_model, "error": str(e)[:200]},
+                    )
+                    # Fall through to normal chain on failure
+
     chain = get_task_chain(task)
 
     for entry in chain:

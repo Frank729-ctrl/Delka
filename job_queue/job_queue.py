@@ -68,9 +68,9 @@ async def _process_one(job_id: str, db: AsyncSession) -> None:
         pdf_bytes: bytes
 
         if record.job_type == "cv":
-            pdf_bytes, template_name, color_key, _provider, _model, _quality = await _run_cv_pipeline(record.payload)
+            pdf_bytes, template_name, color_key, _provider, _model, _quality = await _run_cv_pipeline(record.payload, db)
         elif record.job_type == "cover_letter":
-            pdf_bytes, template_name, color_key, _provider, _model, _quality = await _run_letter_pipeline(record.payload)
+            pdf_bytes, template_name, color_key, _provider, _model, _quality = await _run_letter_pipeline(record.payload, db)
         else:
             raise ValueError(f"Unknown job_type: {record.job_type}")
 

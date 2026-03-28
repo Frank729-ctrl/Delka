@@ -14,7 +14,9 @@ async def letter_generate(
     data: CoverLetterRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await generate_cover_letter(data, db)
+    user_id = getattr(request.state, "user_id", "anon") or "anon"
+    platform = getattr(request.state, "platform", "unknown") or "unknown"
+    result = await generate_cover_letter(data, db, user_id=user_id, platform=platform)
 
     request_id = getattr(request.state, "request_id", "")
 

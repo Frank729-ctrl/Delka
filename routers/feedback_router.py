@@ -58,17 +58,17 @@ async def feedback_summary(
 
 @router.get("/v1/admin/feedback/export", dependencies=[Depends(require_master_key)])
 async def feedback_export(
-    platform: str = Query(...),
+    platform: str = Query(None),
+    service: str = Query(None),
     min_rating: int = Query(4),
     db: AsyncSession = Depends(get_db),
 ):
-    data = await feedback_service.export_training_data(platform, db, min_rating)
-    jsonl = "\n".join(json.dumps(row) for row in data)
+    data = await feedback_service.export_training_data(db, platform=platform, service=service, min_rating=min_rating)
+    jsonl = "\n".join(json.dumps(row, ensure_ascii=False) for row in data)
 
+    filename = f"training_data_{service or 'all'}_{platform or 'all'}.jsonl"
     return StreamingResponse(
-        io.BytesIO(jsonl.encode()),
+        io.BytesIO(jsonl.encode("utf-8")),
         media_type="application/x-ndjson",
-        headers={
-            "Content-Disposition": f"attachment; filename=training_data_{platform}.jsonl"
-        },
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

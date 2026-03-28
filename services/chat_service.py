@@ -8,6 +8,7 @@ from services.inference_service import generate_stream_response as _inference_st
 from services import memory_service, conversation_history_service, feedback_service
 from services.personality_service import analyze_user_tone
 from services.correction_service import extract_and_store_correction
+from services.search_service import needs_search, extract_search_query, search
 from prompts.chat_prompt import build_chat_system_prompt
 
 _CHUNK_SIZE = 4
@@ -50,6 +51,12 @@ async def chat(
         yield "data: [DONE]\n\n"
         return
 
+    # 3b. Web search (Tavily) — fetch context before building system prompt
+    search_context = ""
+    if needs_search(request.message):
+        query = extract_search_query(request.message)
+        search_context = await search(query)
+
     # 4. Build system prompt
     system_prompt = build_chat_system_prompt(
         platform=platform,
@@ -59,6 +66,8 @@ async def chat(
         tone_analysis=tone_analysis,
         language_instruction=language_instruction,
     )
+    if search_context:
+        system_prompt = f"{system_prompt}\n\n{search_context}"
 
     # 5. Build messages
     messages = [{"role": "system", "content": system_prompt}]

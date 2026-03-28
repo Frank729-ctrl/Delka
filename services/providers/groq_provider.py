@@ -59,3 +59,69 @@ class GroqProvider(BaseProvider):
             token = chunk.choices[0].delta.content
             if token:
                 yield token
+
+    async def generate_with_tools(
+        self,
+        messages: list[dict],
+        model: str,
+        tools: list[dict],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> str:
+        """
+        Agentic tool-use loop.
+
+        Supports a single tool: ``web_search`` (backed by Tavily).
+        Keeps calling the model until it stops requesting tool calls,
+        then returns the final text response.
+        """
+        import json
+        from groq import AsyncGroq
+        from config import settings
+        from services.search_service import search as tavily_search
+
+        client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+        current_messages = list(messages)
+
+        for _ in range(5):  # guard against infinite loops
+            response = await client.chat.completions.create(
+                model=model,
+                messages=current_messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            choice = response.choices[0]
+
+            if choice.finish_reason != "tool_calls":
+                return choice.message.content or ""
+
+            # Append assistant message with tool_calls
+            current_messages.append(choice.message.model_dump(exclude_none=True))
+
+            # Execute each tool call
+            for tc in choice.message.tool_calls or []:
+                if tc.function.name == "web_search":
+                    try:
+                        args = json.loads(tc.function.arguments)
+                        query = args.get("query", "")
+                    except Exception:
+                        query = ""
+                    result = await tavily_search(query)
+                    current_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": result or "No results found.",
+                        }
+                    )
+
+        # Fallback: one last call without tools
+        fallback = await client.chat.completions.create(
+            model=model,
+            messages=current_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return fallback.choices[0].message.content or ""

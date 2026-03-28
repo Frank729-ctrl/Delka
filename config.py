@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     # Groq
     GROQ_API_KEY: str = ""
 
+    # Tavily web search
+    TAVILY_API_KEY: str = ""
+    TAVILY_SEARCH_DEPTH: str = "basic"
+    TAVILY_MAX_RESULTS: int = 5
+    SEARCH_ENABLED: bool = True
+    USE_AUTOMATIC_TOOL_SEARCH: bool = False
+
     # CV task
     CV_PRIMARY_PROVIDER: str = "groq"
     CV_PRIMARY_MODEL: str = "llama-3.3-70b-versatile"
@@ -79,6 +86,16 @@ class Settings(BaseSettings):
     # Resend email
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "support@snafrate.com"
+
+    # A/B Testing
+    AB_TEST_ENABLED: bool = False
+    AB_TEST_SERVICE: str = "cv"
+    AB_TEST_MODEL_A_PROVIDER: str = "groq"
+    AB_TEST_MODEL_A_MODEL: str = "llama-3.3-70b-versatile"
+    AB_TEST_MODEL_A_WEIGHT: float = 0.5
+    AB_TEST_MODEL_B_PROVIDER: str = "ollama"
+    AB_TEST_MODEL_B_MODEL: str = "delkaai-cv-v1"
+    AB_TEST_MODEL_B_WEIGHT: float = 0.5
 
     # Misc
     LLM_MAX_RETRIES: int = 2

@@ -14,7 +14,9 @@ async def cv_generate(
     data: CVRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await generate_cv(data, db)
+    user_id = getattr(request.state, "user_id", "anon") or "anon"
+    platform = getattr(request.state, "platform", "unknown") or "unknown"
+    result = await generate_cv(data, db, user_id=user_id, platform=platform)
 
     request_id = getattr(request.state, "request_id", "")
 
