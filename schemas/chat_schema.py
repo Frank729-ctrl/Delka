@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ChatRequest(BaseModel):
@@ -10,6 +10,8 @@ class ChatRequest(BaseModel):
 
 
 class ChatMetadata(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     memory_updated: bool
     corrections_detected: bool
     tone_detected: str
