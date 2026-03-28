@@ -5,6 +5,11 @@ from config import settings
 router = APIRouter(tags=["health"])
 
 
+@router.get("/v1/ping")
+async def ping():
+    return {"pong": True}
+
+
 @router.get("/v1/health")
 async def health():
     # ── Groq status ──────────────────────────────────────────────
