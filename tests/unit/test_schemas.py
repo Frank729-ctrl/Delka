@@ -1,8 +1,15 @@
 """Tests for all schema classes — covers 0% schema files by instantiation."""
 import pytest
+from datetime import datetime
 from schemas.common_schema import StandardResponse, ErrorResponse
 from schemas.metrics_schema import MetricsSummary
 from schemas.webhook_schema import WebhookJobRequest
+from schemas.developer_schema import (
+    DeveloperRegisterRequest,
+    DeveloperLoginRequest,
+    DeveloperAccountInfo,
+    DeveloperSessionInfo,
+)
 
 
 # ── common_schema.py ──────────────────────────────────────────────────────────
@@ -72,3 +79,60 @@ def test_webhook_job_request_instantiation():
     )
     assert req.job_id == "job-abc-123"
     assert req.event == "cv.generated"
+
+
+# ── developer_schema.py ───────────────────────────────────────────────────────
+
+def test_developer_register_request():
+    r = DeveloperRegisterRequest(
+        email="dev@example.com",
+        password="secret123",
+        full_name="Dev User",
+        company="Acme",
+    )
+    assert r.email == "dev@example.com"
+    assert r.company == "Acme"
+
+
+def test_developer_register_request_no_company():
+    r = DeveloperRegisterRequest(
+        email="dev@example.com",
+        password="secret123",
+        full_name="Dev User",
+    )
+    assert r.company is None
+
+
+def test_developer_login_request():
+    r = DeveloperLoginRequest(email="dev@example.com", password="pass")
+    assert r.email == "dev@example.com"
+    assert r.password == "pass"
+
+
+def test_developer_account_info():
+    now = datetime.utcnow()
+    info = DeveloperAccountInfo(
+        id=1,
+        email="dev@example.com",
+        full_name="Dev User",
+        company="Acme",
+        is_active=True,
+        is_verified=True,
+        created_at=now,
+        last_login_at=None,
+    )
+    assert info.id == 1
+    assert info.is_active is True
+    assert info.last_login_at is None
+
+
+def test_developer_session_info():
+    now = datetime.utcnow()
+    s = DeveloperSessionInfo(
+        session_token="tok_abc",
+        developer_id=42,
+        expires_at=now,
+        created_at=now,
+    )
+    assert s.session_token == "tok_abc"
+    assert s.developer_id == 42

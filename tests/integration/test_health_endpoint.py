@@ -32,6 +32,36 @@ async def test_health_ollama_unreachable_returns_degraded(client, monkeypatch):
     assert body["status"] == "degraded"
 
 
+async def test_health_ollama_ok_when_reachable(client, monkeypatch):
+    import httpx
+
+    class _OkResp:
+        status_code = 200
+
+    async def ok_get(*a, **kw):
+        return _OkResp()
+
+    monkeypatch.setattr("routers.health_router.httpx.AsyncClient", lambda **kw: _OkCtx(ok_get))
+    resp = await client.get("/v1/health")
+    body = resp.json()
+    assert body["providers"]["ollama"] == "ok"
+    assert body["status"] == "ok"
+
+
+class _OkCtx:
+    def __init__(self, fn):
+        self._fn = fn
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        pass
+
+    async def get(self, *a, **kw):
+        return await self._fn()
+
+
 class _FakeCtx:
     def __init__(self, raiser):
         self._raiser = raiser
