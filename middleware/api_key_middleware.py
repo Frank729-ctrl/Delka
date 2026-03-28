@@ -8,7 +8,7 @@ from config import settings
 
 _PREFIX_LEN = 20
 
-_SKIP_PATHS = {"/v1/health", "/docs", "/openapi.json", "/redoc", "/admin/dashboard"}
+_SKIP_PATHS = {"/v1/health", "/v1/routes", "/docs", "/openapi.json", "/redoc", "/admin/dashboard"}
 
 _ADMIN_PREFIX = "/v1/admin"
 _DEVELOPER_PREFIX = "/v1/developer"

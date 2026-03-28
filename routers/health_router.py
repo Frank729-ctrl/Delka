@@ -5,11 +5,10 @@ from config import settings
 router = APIRouter(tags=["health"])
 
 
-@router.get("/v1/ping")
-async def ping(request: Request):
-    from fastapi import Request as R
-    routes = [getattr(r, "path", None) for r in request.app.routes]
-    return {"pong": True, "registered_routes": [r for r in routes if r]}
+@router.get("/v1/routes")
+async def list_routes(request: Request):
+    routes = sorted(set(getattr(r, "path", None) for r in request.app.routes))
+    return {"routes": [r for r in routes if r]}
 
 
 @router.get("/v1/health")
