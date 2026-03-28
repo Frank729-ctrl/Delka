@@ -1,5 +1,6 @@
 import httpx
 from fastapi import APIRouter, Request, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from config import settings
 
 router = APIRouter(tags=["health"])
@@ -115,6 +116,48 @@ async def console_chat(
                 if token and token != "[DONE]":
                     chunks.append(token)
     return {"reply": "".join(chunks), "session_id": sid}
+
+
+@router.post("/v1/admin/console-chat/stream")
+async def console_chat_stream(
+    request: Request,
+    x_delkaai_master_key: str | None = Header(default=None),
+):
+    """Streaming SSE version of console-chat — for real word-by-word UI rendering."""
+    _check_master(x_delkaai_master_key)
+    body = await request.json()
+    message    = body.get("message", "").strip()
+    session_id = body.get("session_id", "")
+    user_id    = body.get("user_id", "console-user")
+    if not message:
+        raise HTTPException(status_code=422, detail="message required.")
+
+    from schemas.chat_schema import ChatRequest
+    from services.chat_service import chat
+    from database import AsyncSessionLocal
+    import time
+
+    sid = session_id or f"console-chat-{int(time.time())}"
+    req = ChatRequest(
+        user_id=user_id,
+        platform="delkaai-console",
+        session_id=sid,
+        message=message,
+    )
+
+    async def generate():
+        # First yield the session_id as metadata
+        import json
+        yield f"data: {json.dumps({'session_id': sid})}\n\n"
+        async with AsyncSessionLocal() as db:
+            async for chunk in chat(req, db):
+                yield chunk  # already formatted as "data: ...\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/v1/admin/console-support")
