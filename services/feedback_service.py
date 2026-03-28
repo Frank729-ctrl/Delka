@@ -16,6 +16,8 @@ async def store_feedback_log(
     model_used: str,
     response_ms: int,
     db: AsyncSession,
+    auto_score: float | None = None,
+    auto_score_issues: list | None = None,
 ) -> None:
     from models.feedback_log_model import FeedbackLog
 
@@ -29,6 +31,8 @@ async def store_feedback_log(
         provider_used=provider_used,
         model_used=model_used,
         response_ms=response_ms,
+        auto_score=auto_score,
+        auto_score_issues=auto_score_issues or [],
     )
     db.add(entry)
 

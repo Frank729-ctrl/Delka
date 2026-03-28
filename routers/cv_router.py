@@ -29,7 +29,7 @@ async def cv_generate(
             },
         )
 
-    pdf_bytes, template_name, color_key, provider, model = result
+    pdf_bytes, template_name, color_key, provider, model, quality = result
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -40,5 +40,7 @@ async def cv_generate(
             "X-Request-ID": request_id,
             "X-Provider-Used": provider,
             "X-Model-Used": model,
+            "X-Quality-Score": str(quality["total_score"]),
+            "X-Quality-Passed": str(quality["passed"]).lower(),
         },
     )

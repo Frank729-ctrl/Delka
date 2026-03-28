@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, DateTime, Integer, JSON, String
+from sqlalchemy import Column, DateTime, Float, Integer, JSON, String
 from database import Base
 
 
@@ -19,4 +19,6 @@ class FeedbackLog(Base):
     rating_comment = Column(String(500), nullable=True)
     correction = Column(String(1000), nullable=True)
     response_ms = Column(Integer, default=0)
+    auto_score = Column(Float, nullable=True)          # 0.0-1.0, rule-based quality score
+    auto_score_issues = Column(JSON, default=list)     # list of issue strings from quality scorer
     created_at = Column(DateTime, default=datetime.utcnow)

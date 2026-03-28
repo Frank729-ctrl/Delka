@@ -8,16 +8,20 @@ from services.export_service import render_letter_to_pdf
 from services.inference_service import generate_full_response as _inference_full
 from services.output_validator import clean_letter_output
 from prompts.cover_letter_prompt import build_letter_prompt
+from services.quality_scorer import score_letter_output, log_quality_result
 from job_queue.job_queue import enqueue_job
 
 
-async def _run_letter_pipeline(payload: dict) -> tuple[bytes, str, str, str, str]:
+async def _run_letter_pipeline(payload: dict) -> tuple[bytes, str, str, str, str, dict]:
     data = CoverLetterRequest(**payload)
     lang = detect_language(data.applicant_background)
     lang_instruction = get_language_instruction(lang)
     sys_prompt, user_prompt = build_letter_prompt(data, lang_instruction)
     raw, provider, model = await _inference_full("letter", sys_prompt, user_prompt)
     letter_text = clean_letter_output(raw)
+
+    quality = score_letter_output(letter_text)
+    log_quality_result("cover_letter", quality)
 
     meta = {
         "applicant_name": data.applicant_name,
@@ -28,13 +32,13 @@ async def _run_letter_pipeline(payload: dict) -> tuple[bytes, str, str, str, str
 
     template_name, color = pick_random_letter_template()
     pdf_bytes = render_letter_to_pdf(letter_text, meta, template_name, color)
-    return pdf_bytes, template_name, template_name, provider, model
+    return pdf_bytes, template_name, template_name, provider, model, quality
 
 
 async def generate_cover_letter(
     data: CoverLetterRequest,
     db: AsyncSession,
-) -> tuple[bytes, str, str, str, str] | dict:
+) -> tuple[bytes, str, str, str, str, dict] | dict:
     if data.webhook_url:
         job_id = str(uuid.uuid4())
         await enqueue_job(
