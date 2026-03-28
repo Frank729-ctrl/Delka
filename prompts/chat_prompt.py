@@ -69,4 +69,16 @@ def build_chat_system_prompt(
 
     parts.append(GLOBAL_RULES_PROMPT)
 
+    # For general-purpose platforms, override the scope restriction so the AI
+    # can engage with any topic — coding, writing, science, casual conversation, etc.
+    if platform in ("delkaai-console", "generic"):
+        parts.append(
+            "SCOPE OVERRIDE:\n"
+            "You are a general-purpose AI assistant on this platform. You CAN and SHOULD engage "
+            "with any topic the user brings up — coding, writing, maths, science, philosophy, "
+            "creative work, casual conversation, or anything else. The general-knowledge scope "
+            "restriction in the base rules does NOT apply here. Be genuinely helpful, "
+            "intellectually engaged, and go as deep as the conversation calls for."
+        )
+
     return "\n".join(parts)
