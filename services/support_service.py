@@ -12,6 +12,46 @@ _FALLBACK = "I'm here to help. Could you rephrase your question?"
 _CHUNK_SIZE = 4  # characters per SSE token when fake-streaming
 
 
+async def get_plain_reply(
+    message: str,
+    session_id: str,
+    user_id: str,
+    platform: str,
+    db=None,
+) -> tuple[str, str]:
+    """Return (reply_text, session_id) without streaming — used by non-SSE callers."""
+    data = SupportChatRequest(
+        message=message,
+        platform=platform,
+        session_id=session_id,
+        user_id=user_id,
+    )
+    sid = data.session_id or "anon"
+
+    lang = detect_language(data.message)
+    lang_instruction = get_language_instruction(lang)
+    system_prompt = build_support_system_prompt(data.platform, lang_instruction)
+
+    history = get_history(sid)
+    messages = [{"role": "system", "content": system_prompt}]
+    for entry in history:
+        messages.append({"role": entry["role"], "content": entry["content"]})
+    messages.append({"role": "user", "content": data.message})
+
+    tokens: list[str] = []
+    async for token in _inference_stream("support", messages):
+        tokens.append(token)
+
+    full_response = "".join(tokens)
+    if not validate_support_response(full_response):
+        full_response = _FALLBACK
+
+    append_message(sid, "user", data.message)
+    append_message(sid, "assistant", full_response)
+
+    return full_response, sid
+
+
 async def handle_chat(data: SupportChatRequest, db=None) -> StreamingResponse:
     session_id = data.session_id or "anon"
     start_ms = int(time.time() * 1000)

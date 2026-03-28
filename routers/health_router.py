@@ -95,24 +95,17 @@ async def console_support(
     if not message:
         raise HTTPException(status_code=422, detail="message required.")
 
-    from schemas.chat_schema import ChatRequest
-    from services.support_service import handle_chat
-
-    req = ChatRequest(
-        user_id=user_id,
-        platform="delkaai-console",
-        session_id=session_id,
-        message=message,
-    )
+    from services.support_service import get_plain_reply
     from database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
-        chunks = []
-        async for chunk in handle_chat(req, db):
-            if chunk.startswith("data: "):
-                token = chunk[6:].strip()
-                if token and token != "[DONE]":
-                    chunks.append(token)
-    return {"reply": "".join(chunks), "session_id": session_id}
+        reply, out_session = await get_plain_reply(
+            message=message,
+            session_id=session_id,
+            user_id=user_id,
+            platform="delkaai-console",
+            db=db,
+        )
+    return {"reply": reply, "session_id": out_session}
 
 
 @router.get("/v1/health")
