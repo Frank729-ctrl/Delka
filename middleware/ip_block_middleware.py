@@ -5,7 +5,7 @@ from database import AsyncSessionLocal
 from security.ip_blocker import is_ip_blocked
 
 _SKIP_PATHS = {"/v1/health"}
-_SKIP_PREFIXES = ("/admin/", "/console/", "/static/")
+_SKIP_PREFIXES = ("/admin/", "/console/", "/static/", "/v1/admin/")
 
 
 class IPBlockMiddleware(BaseHTTPMiddleware):
