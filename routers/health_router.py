@@ -111,7 +111,7 @@ async def console_chat(
         chunks = []
         async for chunk in chat(req, db):
             if chunk.startswith("data: "):
-                token = chunk[6:].strip()
+                token = chunk[6:].rstrip('\n')
                 if token and token != "[DONE]":
                     chunks.append(token)
     return {"reply": "".join(chunks), "session_id": sid}

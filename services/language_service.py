@@ -29,6 +29,8 @@ _LANGUAGE_MAP: dict[str, str] = {
 
 
 def detect_language(text: str) -> str:
+    if len(text.strip()) < 15:
+        return "en"
     try:
         return _detect(text)
     except (LangDetectException, Exception):
