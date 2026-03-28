@@ -17,6 +17,36 @@ You are a world-class cover letter writer who crafts letters that hiring manager
 Your letters are concise, confident, and tailored — never generic.
 """.strip()
 
+CHAIN_OF_THOUGHT_LETTER = """
+Before writing the letter, think inside <thinking> tags:
+
+1. What is the company's culture? (corporate / startup / NGO / government)
+2. What is the single strongest reason to hire this person for this role?
+3. What tone fits this application? (formal / professional / enthusiastic)
+4. What specific achievement should lead the opening paragraph?
+5. What would make this letter memorable compared to 100 generic applications?
+
+Format: <thinking>your reasoning here</thinking>
+Then output ONLY the letter body text.
+""".strip()
+
+LETTER_OUTPUT_CONTRACT = """
+OUTPUT CONTRACT:
+Return ONLY the letter body text — no subject line, no date, no address block.
+
+STRUCTURE RULES:
+- Opening: strong hook — NEVER start with "I am writing to apply for..."
+- Body: 3-4 paragraphs maximum, one clear point each
+- Closing: confident and specific, not begging or hollow
+- Length: 250-400 words maximum
+
+BANNED PHRASES (never use):
+- "passionate", "team player", "hard worker", "results-driven", "dynamic"
+- "I am writing to...", "I look forward to hearing from you"
+- "I am a fast learner", "I thrive in fast-paced environments"
+- Any hollow filler that could apply to any job at any company
+""".strip()
+
 
 def build_letter_prompt(
     data: CoverLetterRequest,
@@ -30,8 +60,10 @@ def build_letter_prompt(
         "OUTPUT FORMAT: Return the letter body text ONLY. No subject line. No date. No address block. No salutation header. Body paragraphs only.",
     ])
 
-    user = f"""
-Write a cover letter body for the following application:
+    user = "\n\n".join([
+        CHAIN_OF_THOUGHT_LETTER,
+        LETTER_OUTPUT_CONTRACT,
+        f"""Write a cover letter body for the following application:
 
 Applicant Name: {data.applicant_name}
 Applying For: {data.job_title} at {data.company_name}
@@ -44,7 +76,7 @@ Applicant Background:
 {data.applicant_background}
 
 Return the letter body only — no headers, no date, no address, no "Dear" salutation line.
-Start directly with the opening paragraph.
-""".strip()
+Start directly with the opening paragraph.""",
+    ])
 
     return system, user

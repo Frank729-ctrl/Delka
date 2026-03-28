@@ -54,6 +54,20 @@ _COMPETITOR_NAMES = ["chatgpt", "openai", "gpt-4", "gpt4", "gemini", "copilot", 
 _JAILBREAK_CONFIRMS = ["i am now", "entering jailbreak", "jailbreak mode", "dan mode"]
 
 
+_THINKING_RE = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)
+
+
+def strip_thinking_blocks(text: str) -> tuple[str, list[str]]:
+    """
+    Remove <thinking>...</thinking> blocks from LLM output.
+    Returns (clean_text, thinking_blocks_list).
+    The thinking_blocks list can be stored in feedback logs for quality analysis.
+    """
+    blocks = _THINKING_RE.findall(text)
+    clean = _THINKING_RE.sub("", text).strip()
+    return clean, blocks
+
+
 def _strip_fences(raw: str) -> str:
     return _FENCE_RE.sub("", raw).strip()
 
@@ -84,7 +98,8 @@ async def validate_and_parse_cv(
 
     for attempt in range(max_retries + 1):
         try:
-            cleaned = _strip_fences(raw)
+            no_thinking, _ = strip_thinking_blocks(raw)
+            cleaned = _strip_fences(no_thinking)
             data = json.loads(cleaned)
             _validate_cv_structure(data)
             return data
@@ -105,6 +120,7 @@ async def validate_and_parse_cv(
 
 
 def clean_letter_output(raw: str) -> str:
+    raw, _ = strip_thinking_blocks(raw)
     lines = raw.strip().splitlines()
     cleaned: list[str] = []
 

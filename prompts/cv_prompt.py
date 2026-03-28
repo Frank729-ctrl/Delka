@@ -14,32 +14,62 @@ You are an expert professional CV writer with 20 years of experience crafting ex
 You write concise, impactful, ATS-optimised CVs that get interviews.
 """.strip()
 
-_JSON_SCHEMA_EXAMPLE = """
+CHAIN_OF_THOUGHT_CV = """
+Before writing the CV, reason through these questions inside <thinking> tags:
+
+1. What career level is this person? (entry / mid / senior)
+2. What industry and role are they targeting?
+3. What are their 3 strongest selling points?
+4. What CV format suits their background? (chronological / functional / hybrid)
+5. What tone is appropriate? (corporate / startup / academic / government)
+6. What would make a recruiter stop scrolling?
+7. Are there gaps or weaknesses to address carefully?
+
+Format: <thinking>your reasoning here</thinking>
+Then output ONLY the JSON CV.
+""".strip()
+
+SELF_CRITIQUE_PROMPT = """
+After drafting the CV, review your own output:
+- Is every bullet achievement-focused, not task-focused?
+- Are there clichés? ("team player", "hard worker", "passionate", "results-driven")
+- Is the summary punchy and specific — not generic?
+- Does the CV clearly match the target role?
+- Would a recruiter be impressed in 6 seconds?
+
+If anything fails — rewrite that section before outputting the final JSON.
+""".strip()
+
+CV_OUTPUT_CONTRACT = """
+OUTPUT CONTRACT — NEVER VIOLATE:
+Return EXACTLY this JSON structure. Every field must be present even if empty ("" or []).
+No markdown. No code fences. No explanation. Raw JSON only.
+
 {
   "full_name": "string",
   "email": "string",
   "phone": "string",
   "location": "string",
-  "summary": "string (2-3 sentences)",
+  "summary": "2-4 sentences, specific and punchy",
   "experience": [
     {
       "company": "string",
       "title": "string",
       "start_date": "string",
       "end_date": "string",
-      "bullets": ["string", "string", "string"]
+      "bullets": ["starts with strong past-tense action verb, quantified where possible"]
     }
   ],
-  "education": [
-    {
-      "school": "string",
-      "degree": "string",
-      "field": "string",
-      "year": "string"
-    }
-  ],
+  "education": [{"school": "", "degree": "", "field": "", "year": ""}],
   "skills": ["string"]
 }
+
+QUALITY RULES:
+- summary: 2-4 sentences, specific and punchy — never generic
+- bullets: 3-6 per role, must start with a strong past-tense action verb
+- skills: minimum 3 items
+- No bullets starting with "Responsible for" or "Helped with"
+- No clichés anywhere: "team player", "hard worker", "passionate", "results-driven", "dynamic"
 """.strip()
 
 
@@ -49,9 +79,6 @@ def build_cv_prompt(data: CVRequest, language_instruction: str) -> tuple[str, st
         _DOCUMENT_RULES,
         _CV_PERSONA,
         f"OUTPUT LANGUAGE: {language_instruction}",
-        "CRITICAL OUTPUT INSTRUCTION: Return ONLY valid JSON. No markdown. No code fences. No explanation. JSON only.",
-        "CRITICAL OUTPUT INSTRUCTION: Do NOT wrap your response in ```json or ``` blocks. Raw JSON only.",
-        f"CRITICAL OUTPUT INSTRUCTION: Your entire response must be parseable by json.loads(). No text before or after the JSON object. JSON only.\n\nExpected schema:\n{_JSON_SCHEMA_EXAMPLE}",
     ])
 
     experience_text = ""
@@ -75,8 +102,11 @@ def build_cv_prompt(data: CVRequest, language_instruction: str) -> tuple[str, st
 
     skills_text = ", ".join(data.skills) if data.skills else "Not provided"
 
-    user = f"""
-Please create a professional CV in JSON format using the following information:
+    user = "\n\n".join([
+        CHAIN_OF_THOUGHT_CV,
+        SELF_CRITIQUE_PROMPT,
+        CV_OUTPUT_CONTRACT,
+        f"""Generate a CV for the following person:
 
 PERSONAL INFO:
 Full Name: {data.full_name}
@@ -96,9 +126,7 @@ EDUCATION:
 {education_text.strip()}
 
 SKILLS:
-{skills_text}
-
-Return the complete CV as a single valid JSON object. No markdown. No fences. No explanation. JSON only.
-""".strip()
+{skills_text}""",
+    ])
 
     return system, user
