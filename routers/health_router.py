@@ -81,6 +81,42 @@ async def dev_keys_revoke(
     return {"success": True}
 
 
+@router.post("/v1/admin/console-chat")
+async def console_chat(
+    request: Request,
+    x_delkaai_master_key: str | None = Header(default=None),
+):
+    """General AI chat for the developer console tab — master-key authenticated."""
+    _check_master(x_delkaai_master_key)
+    body = await request.json()
+    message    = body.get("message", "").strip()
+    session_id = body.get("session_id", "")
+    user_id    = body.get("user_id", "console-user")
+    if not message:
+        raise HTTPException(status_code=422, detail="message required.")
+
+    from schemas.chat_schema import ChatRequest
+    from services.chat_service import chat
+    from database import AsyncSessionLocal
+    import time
+
+    sid = session_id or f"console-chat-{int(time.time())}"
+    req = ChatRequest(
+        user_id=user_id,
+        platform="delkaai-console",
+        session_id=sid,
+        message=message,
+    )
+    async with AsyncSessionLocal() as db:
+        chunks = []
+        async for chunk in chat(req, db):
+            if chunk.startswith("data: "):
+                token = chunk[6:].strip()
+                if token and token != "[DONE]":
+                    chunks.append(token)
+    return {"reply": "".join(chunks), "session_id": sid}
+
+
 @router.post("/v1/admin/console-support")
 async def console_support(
     request: Request,
