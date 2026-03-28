@@ -81,6 +81,40 @@ async def dev_keys_revoke(
     return {"success": True}
 
 
+@router.post("/v1/admin/console-support")
+async def console_support(
+    request: Request,
+    x_delkaai_master_key: str | None = Header(default=None),
+):
+    """Support chat for the developer console — master-key authenticated, returns full JSON response."""
+    _check_master(x_delkaai_master_key)
+    body = await request.json()
+    message    = body.get("message", "").strip()
+    session_id = body.get("session_id", "console-default")
+    user_id    = body.get("user_id", "console-user")
+    if not message:
+        raise HTTPException(status_code=422, detail="message required.")
+
+    from schemas.chat_schema import ChatRequest
+    from services.support_service import handle_chat
+
+    req = ChatRequest(
+        user_id=user_id,
+        platform="delkaai-console",
+        session_id=session_id,
+        message=message,
+    )
+    from database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        chunks = []
+        async for chunk in handle_chat(req, db):
+            if chunk.startswith("data: "):
+                token = chunk[6:].strip()
+                if token and token != "[DONE]":
+                    chunks.append(token)
+    return {"reply": "".join(chunks), "session_id": session_id}
+
+
 @router.get("/v1/health")
 async def health():
     # ── Groq status ──────────────────────────────────────────────
