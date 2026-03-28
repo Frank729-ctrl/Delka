@@ -183,12 +183,6 @@ async def client(test_engine, monkeypatch):
     import routers.admin_console_router as _acr
     monkeypatch.setattr(_acr, "AsyncSessionLocal", TestSessionLocal)
 
-    import routers.console_router as _cr
-    monkeypatch.setattr(_cr, "AsyncSessionLocal", TestSessionLocal)
-
-    import routers.developer_api_router as _dar
-    monkeypatch.setattr(_dar, "AsyncSessionLocal", TestSessionLocal)
-
     # Also clear rate-limit windows so prior tests don't bleed through
     import middleware.rate_limit_middleware as _rl
     _rl._key_windows.clear()
