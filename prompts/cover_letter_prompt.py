@@ -1,4 +1,4 @@
-from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT
+from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT, GHANAIAN_CONTEXT_PROMPT
 from schemas.cover_letter_schema import CoverLetterRequest
 
 _DOCUMENT_RULES = """
@@ -54,6 +54,7 @@ def build_letter_prompt(
 ) -> tuple[str, str]:
     system = "\n\n".join([
         GLOBAL_RULES_PROMPT,
+        GHANAIAN_CONTEXT_PROMPT,
         _DOCUMENT_RULES,
         _LETTER_PERSONA,
         f"OUTPUT LANGUAGE: {language_instruction}",

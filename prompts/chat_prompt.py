@@ -4,7 +4,7 @@ from prompts.personality_prompt import (
     PLATFORM_PERSONALITIES,
 )
 from prompts.memory_prompt import build_memory_context
-from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT
+from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT, GHANAIAN_CONTEXT_PROMPT
 
 
 def build_chat_system_prompt(
@@ -15,7 +15,7 @@ def build_chat_system_prompt(
     tone_analysis: dict,
     language_instruction: str,
 ) -> str:
-    parts = [CORE_IDENTITY_PROMPT, "", LANGUAGE_QUALITY_RULES, ""]
+    parts = [CORE_IDENTITY_PROMPT, "", LANGUAGE_QUALITY_RULES, "", GHANAIAN_CONTEXT_PROMPT, ""]
 
     personality = PLATFORM_PERSONALITIES.get(platform, PLATFORM_PERSONALITIES["generic"])
     parts.append(

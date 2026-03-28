@@ -1,4 +1,4 @@
-from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT
+from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT, GHANAIAN_CONTEXT_PROMPT
 
 PLATFORM_PROMPTS: dict[str, str] = {
     "swypply": """
@@ -132,6 +132,7 @@ def build_support_system_prompt(platform: str, language_instruction: str) -> str
 
     return "\n\n".join([
         GLOBAL_RULES_PROMPT,
+        GHANAIAN_CONTEXT_PROMPT,
         platform_prompt,
         scope_rule,
         language_instruction,

@@ -1,4 +1,4 @@
-from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT
+from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT, GHANAIAN_CONTEXT_PROMPT
 from schemas.cv_schema import CVRequest
 
 _DOCUMENT_RULES = """
@@ -76,6 +76,7 @@ QUALITY RULES:
 def build_cv_prompt(data: CVRequest, language_instruction: str) -> tuple[str, str]:
     system = "\n\n".join([
         GLOBAL_RULES_PROMPT,
+        GHANAIAN_CONTEXT_PROMPT,
         _DOCUMENT_RULES,
         _CV_PERSONA,
         f"OUTPUT LANGUAGE: {language_instruction}",
