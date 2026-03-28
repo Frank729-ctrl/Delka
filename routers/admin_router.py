@@ -19,6 +19,11 @@ async def require_master_key(
         raise HTTPException(status_code=401, detail="Invalid master key.")
 
 
+@router.get("/ping")
+async def admin_ping():
+    return {"admin_router": "ok"}
+
+
 @router.post("/keys/create", status_code=201, dependencies=[Depends(require_master_key)])
 async def create_keys(
     data: CreateKeyPairRequest,
