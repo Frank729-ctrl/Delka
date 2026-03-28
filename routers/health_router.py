@@ -1,14 +1,84 @@
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Header, HTTPException
 from config import settings
 
 router = APIRouter(tags=["health"])
 
 
-@router.get("/v1/routes")
-async def list_routes(request: Request):
-    routes = sorted(set(getattr(r, "path", None) for r in request.app.routes))
-    return {"routes": [r for r in routes if r]}
+# ── Developer key management (lazy imports — guaranteed to load) ──────────────
+
+def _check_master(key: str | None) -> None:
+    if not key or key != settings.SECRET_MASTER_KEY:
+        raise HTTPException(status_code=401, detail="Invalid master key.")
+
+
+@router.post("/v1/admin/dev-keys/create")
+async def dev_keys_create(
+    request: Request,
+    x_delkaai_master_key: str | None = Header(default=None),
+):
+    _check_master(x_delkaai_master_key)
+    body = await request.json()
+    owner    = body.get("owner", "").strip().lower()
+    key_name = body.get("key_name", "").strip()
+    if not owner or not key_name:
+        raise HTTPException(status_code=422, detail="owner and key_name required.")
+
+    from database import AsyncSessionLocal
+    from security.key_store import create_key_pair
+    async with AsyncSessionLocal() as db:
+        result = await create_key_pair(platform=key_name, owner=owner,
+                                       requires_hmac=False, db=db)
+    return result
+
+
+@router.get("/v1/admin/dev-keys/list")
+async def dev_keys_list(
+    owner: str,
+    x_delkaai_master_key: str | None = Header(default=None),
+):
+    _check_master(x_delkaai_master_key)
+    from database import AsyncSessionLocal
+    from sqlalchemy import select
+    from models.api_key_model import APIKey
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(
+            select(APIKey).where(APIKey.owner == owner.strip().lower())
+        )
+        keys = rows.scalars().all()
+    return {"keys": [
+        {
+            "raw_prefix":   k.raw_prefix,
+            "key_type":     k.key_type,
+            "platform":     k.platform,
+            "owner":        k.owner,
+            "is_active":    k.is_active,
+            "usage_count":  k.usage_count,
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "created_at":   k.created_at.isoformat() if k.created_at else None,
+        }
+        for k in keys
+    ]}
+
+
+@router.post("/v1/admin/dev-keys/revoke")
+async def dev_keys_revoke(
+    request: Request,
+    x_delkaai_master_key: str | None = Header(default=None),
+):
+    _check_master(x_delkaai_master_key)
+    body = await request.json()
+    prefix = body.get("key_prefix", "").strip()
+    if not prefix:
+        raise HTTPException(status_code=422, detail="key_prefix required.")
+
+    from database import AsyncSessionLocal
+    from security.key_store import revoke_key
+    async with AsyncSessionLocal() as db:
+        ok = await revoke_key(prefix, db)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Key not found.")
+    return {"success": True}
 
 
 @router.get("/v1/health")
