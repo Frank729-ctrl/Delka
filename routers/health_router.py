@@ -1,13 +1,15 @@
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from config import settings
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/v1/ping")
-async def ping():
-    return {"pong": True}
+async def ping(request: Request):
+    from fastapi import Request as R
+    routes = [getattr(r, "path", None) for r in request.app.routes]
+    return {"pong": True, "registered_routes": [r for r in routes if r]}
 
 
 @router.get("/v1/health")
