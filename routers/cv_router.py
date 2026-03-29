@@ -73,27 +73,36 @@ async def cv_generate(
     platform = getattr(request.state, "platform", "unknown") or "unknown"
 
     # If raw_text provided and structured fields are empty, parse it first
-    if data.raw_text.strip() and not data.full_name.strip():
-        parsed = await _parse_raw_text(data.raw_text)
-        # Merge parsed fields into data, keeping any explicitly set fields
-        merged = {**parsed, "platform": platform}
-        if data.phone:     merged["phone"]       = data.phone
-        if data.location:  merged["location"]    = data.location
-        if data.linkedin:  merged["linkedin"]    = data.linkedin
-        if data.website:   merged["website"]     = data.website
+    raw = data.raw_text.strip()
+    if raw and not data.full_name.strip():
+        parsed = await _parse_raw_text(raw)
+        # Merge parsed fields, keeping any explicitly set fields
+        merged = {**parsed}
+        if data.phone:       merged["phone"]       = data.phone
+        if data.location:    merged["location"]    = data.location
+        if data.linkedin:    merged["linkedin"]    = data.linkedin
+        if data.website:     merged["website"]     = data.website
         if data.webhook_url: merged["webhook_url"] = data.webhook_url
+
+        # Fallbacks: use raw_text as summary if AI returned nothing
+        if not merged.get("summary", "").strip():
+            merged["summary"] = raw
+        # Fallback: minimal education entry so pipeline doesn't break
+        if not merged.get("education"):
+            merged["education"] = [{"school": "Not specified", "degree": "Not specified", "year": ""}]
+        # Fallback: keep raw_text so the CV prompt has full context
+        merged["raw_text"] = raw
+
         try:
             data = CVRequest(**merged)
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Parsed CV data invalid: {e}")
 
-    # Validate that we now have the required fields
+    # Validate required fields
     if not data.full_name.strip():
         raise HTTPException(status_code=422, detail="full_name is required (or provide raw_text).")
     if not data.summary.strip():
         raise HTTPException(status_code=422, detail="summary is required (or provide raw_text).")
-    if not data.education:
-        raise HTTPException(status_code=422, detail="At least one education entry is required (or provide raw_text).")
 
     result = await generate_cv(data, db, user_id=user_id, platform=platform)
 
