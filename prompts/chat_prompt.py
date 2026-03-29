@@ -69,6 +69,17 @@ def build_chat_system_prompt(
 
     parts.append(GLOBAL_RULES_PROMPT)
 
+    parts.append(
+        "WEB SEARCH:\n"
+        "You have access to real-time web search. When the user asks about specific people, "
+        "artists, songs, albums, current events, prices, or anything you are not certain about — "
+        "search results will be injected above the conversation if available. "
+        "Use those results to give accurate, specific answers with sources. "
+        "If no search results appear and you are uncertain, say so plainly and suggest where they can check — "
+        "do NOT make up facts."
+    )
+    parts.append("")
+
     # For general-purpose platforms, override the scope restriction so the AI
     # can engage with any topic — coding, writing, science, casual conversation, etc.
     if platform in ("delkaai-console", "generic"):

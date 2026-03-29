@@ -54,7 +54,14 @@ async def chat(
     # 3b. Web search (Tavily) — fetch context before building system prompt
     search_context = ""
     if needs_search(request.message):
-        query = extract_search_query(request.message)
+        # Build a context hint from recent history so vague queries like
+        # "search them for me" resolve to the actual topic being discussed
+        context_hint = ""
+        for entry in reversed(recent_history):
+            if entry["role"] == "user" and len(entry["content"].split()) >= 3:
+                context_hint = entry["content"]
+                break
+        query = extract_search_query(request.message, context_hint=context_hint)
         search_context = await search(query)
 
     # 4. Build system prompt

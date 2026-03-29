@@ -26,7 +26,9 @@ _SEARCH_TRIGGERS = re.compile(
     r"|latest|recent|current|today|now|news|update"
     r"|price|cost|rate|score|result|winner"
     r"|define|meaning of|explain"
-    r"|tell me about|search for|look up|find out"
+    r"|tell me about|search for|look up|find out|search them|search (for|it|him|her)"
+    r"|songs?|albums?|tracks?|discography|artist|music by|released by"
+    r"|suggest|recommend|which (songs?|albums?|tracks?)"
     r")\b",
     re.IGNORECASE,
 )
@@ -65,12 +67,22 @@ _STRIP_LEAD = re.compile(
     re.IGNORECASE,
 )
 
+# Vague pronoun-only queries that need the conversation topic prepended
+_VAGUE_RE = re.compile(
+    r"^(why don'?t you |can you )?(search (them|it|him|her|for me)|find (them|it)|look (them|it) up|suggest (some|me)|recommend (some|me))[\s?]*$",
+    re.IGNORECASE,
+)
 
-def extract_search_query(message: str) -> str:
+
+def extract_search_query(message: str, context_hint: str = "") -> str:
     """Strip conversational preamble and return a clean search query."""
     q = message.strip().rstrip("?").strip()
+
+    # If message is too vague (just "search them for me"), use context hint
+    if _VAGUE_RE.match(q) and context_hint:
+        return context_hint
+
     q = _STRIP_LEAD.sub("", q).strip()
-    # Collapse whitespace
     q = re.sub(r"\s+", " ", q)
     return q or message.strip()
 
