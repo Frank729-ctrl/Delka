@@ -25,7 +25,7 @@ async def chat(
     # 1. Fetch memory
     profile = await memory_service.get_or_create_profile(user_id, platform, db)
     recent_history = await conversation_history_service.get_recent_history(
-        user_id, platform, db
+        user_id, platform, db, session_id=session_id
     )
     rag_examples = await feedback_service.get_rag_examples(
         user_id, platform, "chat", db

@@ -22,22 +22,28 @@ async def store_message(
         tokens_estimate=estimate_tokens(content),
     )
     db.add(entry)
+    await db.commit()
 
 
 async def get_recent_history(
     user_id: str,
     platform: str,
     db: AsyncSession,
-    limit: int = 10,
+    limit: int = 20,
+    session_id: str = "",
 ) -> list[dict]:
     from models.conversation_log_model import ConversationLog
 
+    conditions = [
+        ConversationLog.user_id == user_id,
+        ConversationLog.platform == platform,
+    ]
+    if session_id:
+        conditions.append(ConversationLog.session_id == session_id)
+
     result = await db.execute(
         select(ConversationLog)
-        .where(
-            ConversationLog.user_id == user_id,
-            ConversationLog.platform == platform,
-        )
+        .where(*conditions)
         .order_by(ConversationLog.created_at.desc())
         .limit(limit)
     )
@@ -46,6 +52,7 @@ async def get_recent_history(
     return [
         {"role": r.role, "content": r.content, "created_at": str(r.created_at)}
         for r in reversed(rows)
+        if r.role in ("user", "assistant")
     ]
 
 
@@ -124,6 +131,7 @@ async def summarize_old_history(
         tokens_estimate=estimate_tokens(summary_text),
     )
     db.add(summary_entry)
+    await db.commit()
     return summary_text
 
 
