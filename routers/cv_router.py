@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Request
+import json
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
@@ -7,6 +8,60 @@ from services.cv_service import generate_cv
 
 router = APIRouter(prefix="/v1/cv", tags=["cv"])
 
+_PARSE_SYSTEM = """You are a data extraction assistant.
+Extract CV information from free-form text and return ONLY a valid JSON object
+with these exact keys (use empty string / empty list when data is missing):
+{
+  "full_name": "string",
+  "email": "string",
+  "phone": "string",
+  "location": "string",
+  "summary": "string (2-3 sentence professional summary)",
+  "skills": ["string"],
+  "experience": [
+    {
+      "company": "string",
+      "title": "string",
+      "start_date": "string",
+      "end_date": "string",
+      "bullets": ["string"]
+    }
+  ],
+  "education": [
+    {
+      "school": "string",
+      "degree": "string",
+      "field": "string",
+      "year": "string"
+    }
+  ]
+}
+Return JSON only — no markdown, no explanation."""
+
+
+async def _parse_raw_text(raw_text: str) -> dict:
+    """Use the inference service to convert free-form text into CV fields."""
+    from services.inference_service import generate_full_response
+    response_text, _, _ = await generate_full_response(
+        "cv",
+        _PARSE_SYSTEM,
+        f"Extract CV data from this text:\n\n{raw_text}",
+        temperature=0.1,
+    )
+    # Strip markdown fences if present
+    cleaned = response_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("```")[1]
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:]
+    try:
+        return json.loads(cleaned.strip())
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not parse raw_text into CV fields. Please provide more detail or use structured fields.",
+        )
+
 
 @router.post("/generate")
 async def cv_generate(
@@ -14,14 +69,37 @@ async def cv_generate(
     data: CVRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    user_id = getattr(request.state, "user_id", "anon") or "anon"
+    user_id  = getattr(request.state, "user_id",  "anon")    or "anon"
     platform = getattr(request.state, "platform", "unknown") or "unknown"
+
+    # If raw_text provided and structured fields are empty, parse it first
+    if data.raw_text.strip() and not data.full_name.strip():
+        parsed = await _parse_raw_text(data.raw_text)
+        # Merge parsed fields into data, keeping any explicitly set fields
+        merged = {**parsed, "platform": platform}
+        if data.phone:     merged["phone"]       = data.phone
+        if data.location:  merged["location"]    = data.location
+        if data.linkedin:  merged["linkedin"]    = data.linkedin
+        if data.website:   merged["website"]     = data.website
+        if data.webhook_url: merged["webhook_url"] = data.webhook_url
+        try:
+            data = CVRequest(**merged)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Parsed CV data invalid: {e}")
+
+    # Validate that we now have the required fields
+    if not data.full_name.strip():
+        raise HTTPException(status_code=422, detail="full_name is required (or provide raw_text).")
+    if not data.summary.strip():
+        raise HTTPException(status_code=422, detail="summary is required (or provide raw_text).")
+    if not data.education:
+        raise HTTPException(status_code=422, detail="At least one education entry is required (or provide raw_text).")
+
     result = await generate_cv(data, db, user_id=user_id, platform=platform)
 
     request_id = getattr(request.state, "request_id", "")
 
     if isinstance(result, dict):
-        # Webhook / async path
         return JSONResponse(
             status_code=202,
             content={

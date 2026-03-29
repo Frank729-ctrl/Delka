@@ -24,13 +24,17 @@ class EducationItem(BaseModel):
 
 
 class CVRequest(BaseModel):
-    full_name: str
-    email: str
+    # Free-text intake — when provided, structured fields are inferred by AI
+    raw_text: str = ""
+
+    # Structured fields (required when raw_text is absent)
+    full_name: str = ""
+    email: str = ""
     phone: str = ""
     location: str = ""
-    summary: str
-    experience: list[ExperienceItem]
-    education: list[EducationItem]
+    summary: str = ""
+    experience: list[ExperienceItem] = []
+    education: list[EducationItem] = []
     skills: list[str] = []
     linkedin: str = ""
     website: str = ""
