@@ -48,6 +48,8 @@ from routers.code_router import router as code_router
 from routers.detection_router import router as detection_router
 from routers.image_gen_router import router as image_gen_router
 from routers.doc_router import router as doc_router
+from routers.cron_router import router as cron_router
+from routers.analytics_router import router as analytics_router
 from utils.logger import request_logger
 
 _logger = logging.getLogger("delkaai.main")
@@ -58,6 +60,13 @@ _logger = logging.getLogger("delkaai.main")
 async def lifespan(app: FastAPI):
     await create_all_tables()
     asyncio.create_task(process_jobs(AsyncSessionLocal))
+
+    # Brain Upgrade III background loops
+    from services.analytics_service import start_analytics_flush_loop
+    from services.cron_service import run_scheduled_task_loop
+    asyncio.create_task(start_analytics_flush_loop(AsyncSessionLocal))
+    asyncio.create_task(run_scheduled_task_loop(AsyncSessionLocal))
+
     request_logger.info(
         f"DelkaAI v1 started | ENV:{settings.APP_ENV} | Model:{settings.OLLAMA_MODEL}"
     )
@@ -171,4 +180,6 @@ app.include_router(code_router,                tags=["Code Generation"])
 app.include_router(detection_router,           tags=["Object Detection"])
 app.include_router(image_gen_router,           tags=["Image Generation"])
 app.include_router(doc_router,                 tags=["Document Q&A"])
+app.include_router(cron_router,                tags=["Scheduled Tasks"])
+app.include_router(analytics_router,           tags=["Analytics"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST

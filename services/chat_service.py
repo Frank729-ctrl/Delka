@@ -38,6 +38,14 @@ from services.tool_attribution_service import (
     ToolUsage, build_attribution_footnote, detect_plugins_from_context
 )
 from services.tips_service import get_tip_for_user, get_shown_tips, mark_tip_shown, inject_tip_into_prompt
+from services.adaptive_length_service import build_length_instruction
+from services.user_settings_service import (
+    extract_and_save_preferences, get_user_settings, build_settings_instruction
+)
+from services.plan_mode_service import needs_plan_mode, generate_plan, format_plan_for_stream
+from services.policy_limits_service import check_and_increment, load_platform_limits
+from services.speculation_service import speculate_background
+from services.analytics_service import log_event, get_feature_flag
 from prompts.chat_prompt import build_chat_system_prompt
 
 _CHUNK_SIZE = 4
@@ -64,6 +72,14 @@ async def chat(
         user_id, platform, "chat", db
     )
 
+    # ── 1b. Policy limits — check quotas before doing any work ───────────────
+    platform_limits = await load_platform_limits(platform, db)
+    allowed, limit_reason = check_and_increment(platform, user_id, limits=platform_limits)
+    if not allowed:
+        yield f"data: {json.dumps({'type': 'error', 'content': limit_reason})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
     # ── 2. Away summary — if user was gone > 30 min, show recap first ─────────
     from services.away_summary_service import get_away_summary
     away_recap = await get_away_summary(user_id, platform, session_id, db)
@@ -71,10 +87,14 @@ async def chat(
         # Only show recap at session start (no messages yet this turn)
         yield f"data: {json.dumps({'type': 'away_summary', 'content': away_recap})}\n\n"
 
-    # ── 3. Language + tone ────────────────────────────────────────────────────
+    # ── 3. Language + tone + user settings (parallel) ────────────────────────
     lang = detect_language(request.message)
     language_instruction = get_language_instruction(lang)
     tone_analysis = analyze_user_tone(request.message)
+
+    # Extract any preference-setting instructions from this message, load current settings
+    await extract_and_save_preferences(request.message, user_id, platform, db)
+    user_settings = await get_user_settings(user_id, platform, db)
 
     # ── 4. Correction detection ───────────────────────────────────────────────
     correction_ack = await extract_and_store_correction(
@@ -147,6 +167,14 @@ async def chat(
             ))
             return
 
+    # ── 7b. Plan mode — structured plan before complex multi-step tasks ──────
+    if get_feature_flag("plan_mode", True) and needs_plan_mode(request.message):
+        plan = await generate_plan(request.message, platform)
+        if plan:
+            plan_text = format_plan_for_stream(plan)
+            yield f"data: {json.dumps({'type': 'plan', 'content': plan_text})}\n\n"
+            log_event("plan_mode_triggered", platform=platform, user_id=user_id)
+
     # ── 8. Plugins + web search + relevant memories (parallel) ───────────────
     context_hint = ""
     for entry in reversed(recent_history):
@@ -188,10 +216,22 @@ async def chat(
     if search_context:
         system_prompt = f"{system_prompt}\n\n{search_context}"
 
-    # ── 9b. Tips (inject once per user, non-intrusively) ─────────────────────
+    # ── 9b. Adaptive length + user settings + tips ───────────────────────────
+    # Adaptive length: auto-detect intent (brief/detailed/bullets/code-only)
+    if get_feature_flag("brief_mode", True):
+        length_instr = build_length_instruction(request.message)
+        if length_instr:
+            system_prompt = f"{length_instr}\n\n{system_prompt}"
+
+    # User settings: persistent preferences ("always in French", "use bullets")
+    settings_instr = build_settings_instruction(user_settings)
+    if settings_instr:
+        system_prompt = f"{settings_instr}\n\n{system_prompt}"
+
+    # Tips: inject once per user per tip, non-intrusively
     profile_dict = profile.__dict__ if hasattr(profile, "__dict__") else {}
     shown_tips = get_shown_tips(user_id, profile_dict)
-    msg_count = len(recent_history) // 2  # rough message count
+    msg_count = len(recent_history) // 2
     tip_result = get_tip_for_user(user_id, msg_count, request.message, shown_tips)
     if tip_result:
         tip_id, tip_text = tip_result
@@ -321,6 +361,17 @@ async def _post_reply_tasks(
 
         # Old-style history summarization (now supplemented by compact_service)
         await conversation_history_service.summarize_old_history(user_id, platform, db)
+
+        # Pre-generate follow-up questions for next turn (speculation)
+        if get_feature_flag("speculation", True):
+            asyncio.create_task(speculate_background(
+                session_id=session_id,
+                assistant_reply=assistant_reply,
+                platform=platform,
+            ))
+
+        # Log request completion event
+        log_event("request_completed", platform=platform, user_id=user_id, service="chat")
 
     except Exception:
         pass

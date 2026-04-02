@@ -5,6 +5,7 @@ Chain: Cerebras Qwen3-235B → Groq llama-3.3-70b → Ollama codellama
 import re
 from config import settings
 from services.inference_service import generate_full_response
+from services.code_diagnostics_service import diagnose_code, format_diagnostics
 
 
 _SYSTEM_PROMPT = """\
@@ -54,6 +55,13 @@ async def generate_code(
             user_id=user_id,
         )
         code, detected_lang, explanation = _extract_code_and_explanation(text, language)
+
+        # Validate generated code before returning (diagnostics + security scan)
+        if code:
+            diag = diagnose_code(code, detected_lang or language)
+            diag_note = format_diagnostics(diag)
+            explanation = f"{explanation}\n{diag_note}".strip() if explanation else diag_note
+
         return code, detected_lang, explanation, provider, model
     except Exception:
         return "", language, "Code generation unavailable.", "none", ""
