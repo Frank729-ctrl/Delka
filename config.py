@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Groq
     GROQ_API_KEY: str = ""
 
+    # AssemblyAI (STT fallback)
+    ASSEMBLYAI_API_KEY: str = ""
+
     # Google Gemini (OpenAI-compatible endpoint)
     GOOGLE_API_KEY: str = ""
     GEMINI_CHAT_MODEL: str = "gemini-2.5-pro"

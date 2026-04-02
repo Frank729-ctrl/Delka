@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from schemas.speech_schema import SpeechRequest, SpeechResponse
-from services.speech_service import transcribe
+from services.speech_service import transcribe_simple as transcribe
 
 router = APIRouter(prefix="/v1/speech")
 
