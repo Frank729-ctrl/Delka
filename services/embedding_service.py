@@ -3,6 +3,40 @@ import io
 import numpy as np
 from PIL import Image
 
+# ── Cohere text embeddings (async, primary for RAG/reranking) ─────────────────
+
+async def generate_text_embedding_cohere(text: str) -> list[float] | None:
+    """
+    Text embedding via Cohere embed-v4 (multilingual, 1024-d).
+    Falls back to None so callers can use CLIP instead.
+    """
+    try:
+        from config import settings
+        if not settings.COHERE_API_KEY:
+            return None
+        import httpx
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.cohere.com/v2/embed",
+                headers={
+                    "Authorization": f"Bearer {settings.COHERE_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": settings.COHERE_EMBED_MODEL,
+                    "texts": [text],
+                    "input_type": "search_query",
+                    "embedding_types": ["float"],
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            vec = data["embeddings"]["float"][0]
+            arr = np.array(vec, dtype=np.float32)
+            return (arr / np.linalg.norm(arr)).tolist()
+    except Exception:
+        return None
+
 _model = None
 
 

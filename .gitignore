@@ -53,6 +53,14 @@ htmlcov/
 *.gguf
 *.sh
 
+# Training datasets — large files, not needed on server
+*.parquet
+train/delka_train.jsonl
+train/__pycache__/
+
+# LoRA adapter binary weights — too large for git
+models/delkaai-lora-adapter/adapter_model.safetensors
+
 # ChromaDB vector store
 vector_store/
 .claude/

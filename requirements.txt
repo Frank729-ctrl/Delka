@@ -19,6 +19,12 @@ httpx==0.27.0
 # Groq cloud inference
 groq==0.9.0
 
+# OpenAI SDK (used for NVIDIA NIM, Gemini, Cerebras OpenAI-compatible APIs)
+openai==1.30.0
+
+# Text-to-Speech (Microsoft Edge TTS, free, no key, includes Ghana voices)
+edge-tts==6.1.10
+
 # Security
 argon2-cffi==23.1.0
 

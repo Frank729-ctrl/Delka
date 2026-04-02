@@ -4,6 +4,13 @@ PK_ALLOWED_ENDPOINTS: list[str] = [
     "/v1/vision/search",
     "/v1/chat",
     "/v1/feedback",
+    # New Phase 8.5 endpoints — public key access
+    "/v1/ocr/extract",
+    "/v1/speech/transcribe",
+    "/v1/tts/synthesize",
+    "/v1/translate/",
+    "/v1/code/generate",
+    "/v1/detect/objects",
 ]
 
 SK_ALLOWED_ENDPOINTS: list[str] = ["*"]  # all non-admin

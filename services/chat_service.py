@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,9 +10,15 @@ from services import memory_service, conversation_history_service, feedback_serv
 from services.personality_service import analyze_user_tone
 from services.correction_service import extract_and_store_correction
 from services.search_service import needs_search, extract_search_query, search
+from services.plugins.plugin_service import run_plugins
+from services.capability_router import route_capability
 from prompts.chat_prompt import build_chat_system_prompt
 
 _CHUNK_SIZE = 4
+
+
+async def _noop() -> str:
+    return ""
 
 
 async def chat(
@@ -51,18 +58,36 @@ async def chat(
         yield "data: [DONE]\n\n"
         return
 
-    # 3b. Web search (Tavily) — fetch context before building system prompt
-    search_context = ""
+    # 3b. Capability routing — image gen, code, translation handled inline
+    capability_result = await route_capability(request.message)
+    if capability_result:
+        await conversation_history_service.store_message(
+            user_id, platform, session_id, "user", request.message, db
+        )
+        await conversation_history_service.store_message(
+            user_id, platform, session_id, "assistant", capability_result, db
+        )
+        import json as _json
+        yield f"data: {_json.dumps({'content': capability_result})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
+    # 3c. Web search (Tavily) + plugins — run in parallel before building system prompt
+    context_hint = ""
+    for entry in reversed(recent_history):
+        if entry["role"] == "user" and len(entry["content"].split()) >= 3:
+            context_hint = entry["content"]
+            break
+
+    search_task = None
     if needs_search(request.message):
-        # Build a context hint from recent history so vague queries like
-        # "search them for me" resolve to the actual topic being discussed
-        context_hint = ""
-        for entry in reversed(recent_history):
-            if entry["role"] == "user" and len(entry["content"].split()) >= 3:
-                context_hint = entry["content"]
-                break
         query = extract_search_query(request.message, context_hint=context_hint)
-        search_context = await search(query)
+        search_task = asyncio.create_task(search(query))
+
+    plugin_context, search_context = await asyncio.gather(
+        run_plugins(request.message),
+        search_task if search_task else _noop(),
+    )
 
     # 4. Build system prompt
     system_prompt = build_chat_system_prompt(
@@ -73,6 +98,8 @@ async def chat(
         tone_analysis=tone_analysis,
         language_instruction=language_instruction,
     )
+    if plugin_context:
+        system_prompt = f"{system_prompt}\n\n{plugin_context}"
     if search_context:
         system_prompt = f"{system_prompt}\n\n{search_context}"
 

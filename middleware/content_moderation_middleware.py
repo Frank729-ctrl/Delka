@@ -3,6 +3,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from security.content_moderator import screen_input
+from security.nvidia_safety import nvidia_safety_check
 from security.security_logger import log_security_event
 
 _SKIP_PATHS = {"/v1/health", "/docs", "/openapi.json", "/redoc"}
@@ -31,6 +32,10 @@ class ContentModerationMiddleware(BaseHTTPMiddleware):
 
         text = _extract_text(body_bytes)
         is_safe, category = screen_input(text)
+
+        # Augment with NVIDIA safety model for deeper content checking
+        if is_safe:
+            is_safe, category = await nvidia_safety_check(text)
 
         if is_safe:
             return await call_next(request)

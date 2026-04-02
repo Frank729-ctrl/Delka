@@ -3,12 +3,18 @@ from fastapi import HTTPException
 from services.providers.base_provider import BaseProvider
 from services.providers.groq_provider import GroqProvider
 from services.providers.ollama_provider import OllamaProvider
+from services.providers.nvidia_provider import NvidiaProvider
+from services.providers.gemini_provider import GeminiProvider
+from services.providers.cerebras_provider import CerebrasProvider
 from security.security_logger import log_security_event
 
 # Provider registry — single instance of each
 PROVIDER_INSTANCES: dict[str, BaseProvider] = {
     "groq": GroqProvider(),
     "ollama": OllamaProvider(),
+    "nvidia": NvidiaProvider(),
+    "gemini": GeminiProvider(),
+    "cerebras": CerebrasProvider(),
 }
 
 
@@ -23,26 +29,46 @@ def get_task_chain(task: str) -> list[dict]:
         "cv": [
             {"provider": settings.CV_PRIMARY_PROVIDER,
              "model": settings.CV_PRIMARY_MODEL},
+            {"provider": settings.CV_SECONDARY_PROVIDER,
+             "model": settings.CV_SECONDARY_MODEL},
+            {"provider": settings.CV_TERTIARY_PROVIDER,
+             "model": settings.CV_TERTIARY_MODEL},
             {"provider": settings.CV_FALLBACK_PROVIDER,
              "model": settings.CV_FALLBACK_MODEL},
         ],
         "letter": [
             {"provider": settings.LETTER_PRIMARY_PROVIDER,
              "model": settings.LETTER_PRIMARY_MODEL},
+            {"provider": settings.LETTER_SECONDARY_PROVIDER,
+             "model": settings.LETTER_SECONDARY_MODEL},
+            {"provider": settings.LETTER_TERTIARY_PROVIDER,
+             "model": settings.LETTER_TERTIARY_MODEL},
             {"provider": settings.LETTER_FALLBACK_PROVIDER,
              "model": settings.LETTER_FALLBACK_MODEL},
         ],
         "support": [
             {"provider": settings.SUPPORT_PRIMARY_PROVIDER,
              "model": settings.SUPPORT_PRIMARY_MODEL},
+            {"provider": settings.SUPPORT_SECONDARY_PROVIDER,
+             "model": settings.SUPPORT_SECONDARY_MODEL},
             {"provider": settings.SUPPORT_FALLBACK_PROVIDER,
              "model": settings.SUPPORT_FALLBACK_MODEL},
         ],
         "chat": [
             {"provider": settings.SUPPORT_PRIMARY_PROVIDER,
              "model": settings.SUPPORT_PRIMARY_MODEL},
+            {"provider": settings.SUPPORT_SECONDARY_PROVIDER,
+             "model": settings.SUPPORT_SECONDARY_MODEL},
             {"provider": settings.SUPPORT_FALLBACK_PROVIDER,
              "model": settings.SUPPORT_FALLBACK_MODEL},
+        ],
+        "code": [
+            {"provider": settings.CODE_PRIMARY_PROVIDER,
+             "model": settings.CODE_PRIMARY_MODEL},
+            {"provider": settings.CODE_SECONDARY_PROVIDER,
+             "model": settings.CODE_SECONDARY_MODEL},
+            {"provider": settings.CODE_FALLBACK_PROVIDER,
+             "model": settings.CODE_FALLBACK_MODEL},
         ],
     }
     return chains.get(task, chains["support"])

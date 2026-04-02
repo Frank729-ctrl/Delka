@@ -2,6 +2,7 @@ from prompts.personality_prompt import (
     CORE_IDENTITY_PROMPT,
     LANGUAGE_QUALITY_RULES,
     PLATFORM_PERSONALITIES,
+    FULL_CAPABILITY_PROMPT,
 )
 from prompts.memory_prompt import build_memory_context
 from prompts.global_rules_prompt import GLOBAL_RULES_PROMPT, GHANAIAN_CONTEXT_PROMPT
@@ -68,6 +69,9 @@ def build_chat_system_prompt(
         parts.append("")
 
     parts.append(GLOBAL_RULES_PROMPT)
+
+    parts.append(FULL_CAPABILITY_PROMPT)
+    parts.append("")
 
     parts.append(
         "WEB SEARCH:\n"

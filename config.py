@@ -46,6 +46,38 @@ class Settings(BaseSettings):
     # Groq
     GROQ_API_KEY: str = ""
 
+    # Google Gemini (OpenAI-compatible endpoint)
+    GOOGLE_API_KEY: str = ""
+    GEMINI_CHAT_MODEL: str = "gemini-2.5-pro"
+
+    # Cerebras (OpenAI-compatible, free tier)
+    CEREBRAS_API_KEY: str = ""
+    CEREBRAS_CHAT_MODEL: str = "llama-3.3-70b"
+    CEREBRAS_CODE_MODEL: str = "qwen3-235b"
+
+    # Cohere (embeddings)
+    COHERE_API_KEY: str = ""
+    COHERE_EMBED_MODEL: str = "embed-v4.0"
+
+    # NVIDIA NIM
+    NVIDIA_API_KEY: str = ""
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    NVIDIA_CHAT_MODEL: str = "meta/llama-3.1-70b-instruct"
+    NVIDIA_OCR_MODEL: str = "nvidia/neva-22b"
+    NVIDIA_STT_MODEL: str = "nvidia/parakeet-ctc-1.1b-asr"
+    NVIDIA_TTS_MODEL: str = "nvidia/fastpitch-hifigan-tts"
+    NVIDIA_EMBED_MODEL: str = "nvidia/nv-embedqa-e5-v5"
+    NVIDIA_RERANK_MODEL: str = "nvidia/nv-rerankqa-mistral-4b-v3"
+    NVIDIA_TRANSLATE_MODEL: str = "meta/nllb-200-1.3b"
+    NVIDIA_CODE_MODEL: str = "nvidia/starcoder2-15b"
+    NVIDIA_DETECTION_MODEL: str = "nvidia/nemoguard-8b-content-safety"
+    NVIDIA_IMAGE_GEN_MODEL: str = "stabilityai/stable-diffusion-xl-base-1.0"
+    NVIDIA_SAFETY_MODEL: str = "nvidia/llama-3.1-nemoguard-8b-content-safety"
+
+    # Plugin API keys
+    YOUTUBE_API_KEY: str = ""
+    GNEWS_API_KEY: str = ""
+
     # Tavily web search
     TAVILY_API_KEY: str = ""
     TAVILY_SEARCH_DEPTH: str = "basic"
@@ -53,23 +85,41 @@ class Settings(BaseSettings):
     SEARCH_ENABLED: bool = True
     USE_AUTOMATIC_TOOL_SEARCH: bool = False
 
-    # CV task
-    CV_PRIMARY_PROVIDER: str = "groq"
-    CV_PRIMARY_MODEL: str = "llama-3.3-70b-versatile"
+    # CV task — Gemini → Groq → NVIDIA → Ollama
+    CV_PRIMARY_PROVIDER: str = "gemini"
+    CV_PRIMARY_MODEL: str = "gemini-2.5-pro"
+    CV_SECONDARY_PROVIDER: str = "groq"
+    CV_SECONDARY_MODEL: str = "llama-3.3-70b-versatile"
+    CV_TERTIARY_PROVIDER: str = "nvidia"
+    CV_TERTIARY_MODEL: str = "meta/llama-3.1-70b-instruct"
     CV_FALLBACK_PROVIDER: str = "ollama"
     CV_FALLBACK_MODEL: str = "llama3.1"
 
-    # Cover letter task
-    LETTER_PRIMARY_PROVIDER: str = "groq"
-    LETTER_PRIMARY_MODEL: str = "llama-3.3-70b-versatile"
+    # Cover letter task — Gemini → Groq → NVIDIA → Ollama
+    LETTER_PRIMARY_PROVIDER: str = "gemini"
+    LETTER_PRIMARY_MODEL: str = "gemini-2.5-pro"
+    LETTER_SECONDARY_PROVIDER: str = "groq"
+    LETTER_SECONDARY_MODEL: str = "llama-3.3-70b-versatile"
+    LETTER_TERTIARY_PROVIDER: str = "nvidia"
+    LETTER_TERTIARY_MODEL: str = "meta/llama-3.1-70b-instruct"
     LETTER_FALLBACK_PROVIDER: str = "ollama"
     LETTER_FALLBACK_MODEL: str = "llama3.1"
 
-    # Support chat task
+    # Support / chat task — Groq → Cerebras → Ollama
     SUPPORT_PRIMARY_PROVIDER: str = "groq"
     SUPPORT_PRIMARY_MODEL: str = "llama-3.1-8b-instant"
+    SUPPORT_SECONDARY_PROVIDER: str = "cerebras"
+    SUPPORT_SECONDARY_MODEL: str = "llama-3.3-70b"
     SUPPORT_FALLBACK_PROVIDER: str = "ollama"
     SUPPORT_FALLBACK_MODEL: str = "mistral"
+
+    # Code generation — Cerebras → Groq → Ollama
+    CODE_PRIMARY_PROVIDER: str = "cerebras"
+    CODE_PRIMARY_MODEL: str = "qwen3-235b"
+    CODE_SECONDARY_PROVIDER: str = "groq"
+    CODE_SECONDARY_MODEL: str = "llama-3.3-70b-versatile"
+    CODE_FALLBACK_PROVIDER: str = "ollama"
+    CODE_FALLBACK_MODEL: str = "codellama"
 
     # Visual Search
     VISION_PRIMARY_PROVIDER: str = "groq"

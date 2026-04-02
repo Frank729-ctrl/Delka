@@ -24,6 +24,7 @@ from middleware.api_key_middleware import APIKeyMiddleware
 from middleware.key_permission_middleware import KeyPermissionMiddleware
 from middleware.jailbreak_middleware import JailbreakMiddleware
 from middleware.content_moderation_middleware import ContentModerationMiddleware
+from middleware.pii_middleware import PIIMiddleware
 from job_queue.job_queue import process_jobs
 from fastapi.staticfiles import StaticFiles
 from routers import (
@@ -39,6 +40,13 @@ from routers.admin_console_router import router as admin_console_router
 from routers.vision_router import router as vision_router
 from routers.chat_router import router as chat_router
 from routers.feedback_router import router as feedback_router
+from routers.ocr_router import router as ocr_router
+from routers.speech_router import router as speech_router
+from routers.tts_router import router as tts_router
+from routers.translation_router import router as translation_router
+from routers.code_router import router as code_router
+from routers.detection_router import router as detection_router
+from routers.image_gen_router import router as image_gen_router
 from utils.logger import request_logger
 
 _logger = logging.getLogger("delkaai.main")
@@ -83,8 +91,9 @@ app.add_middleware(SanitizeMiddleware)                 # 7
 app.add_middleware(HMACMiddleware)                     # 6
 app.add_middleware(KeyPermissionMiddleware)            # 5 — inner: reads api_key set by APIKey
 app.add_middleware(APIKeyMiddleware)                   # 4 — outer: authenticates first, sets api_key
-app.add_middleware(JailbreakMiddleware)                # 3
-app.add_middleware(ContentModerationMiddleware)        # 2
+app.add_middleware(JailbreakMiddleware)                # 4
+app.add_middleware(ContentModerationMiddleware)        # 3
+app.add_middleware(PIIMiddleware)                      # 2
 app.add_middleware(CORSMiddleware, **get_cors_config())  # 1 — outermost
 
 
@@ -153,4 +162,11 @@ app.include_router(admin_console_router,       tags=["Admin Console"])
 app.include_router(vision_router,              tags=["Visual Search"])
 app.include_router(chat_router,                tags=["Chat"])
 app.include_router(feedback_router,            tags=["Feedback"])
+app.include_router(ocr_router,                 tags=["OCR"])
+app.include_router(speech_router,              tags=["Speech-to-Text"])
+app.include_router(tts_router,                 tags=["Text-to-Speech"])
+app.include_router(translation_router,         tags=["Translation"])
+app.include_router(code_router,                tags=["Code Generation"])
+app.include_router(detection_router,           tags=["Object Detection"])
+app.include_router(image_gen_router,           tags=["Image Generation"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST
