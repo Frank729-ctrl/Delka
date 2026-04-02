@@ -135,5 +135,52 @@ async def summarize_old_history(
     return summary_text
 
 
+async def replace_history_with_summary(
+    user_id: str,
+    platform: str,
+    session_id: str,
+    summary: str,
+    db: AsyncSession,
+) -> None:
+    """
+    Called by compact_service after auto-compaction.
+    Deletes old messages for this session and inserts a summary record
+    so future calls start lean.
+    """
+    from models.conversation_log_model import ConversationLog
+
+    # Get all messages for this session, keep the most recent 12
+    result = await db.execute(
+        select(ConversationLog)
+        .where(
+            ConversationLog.user_id == user_id,
+            ConversationLog.platform == platform,
+            ConversationLog.session_id == session_id,
+        )
+        .order_by(ConversationLog.created_at.asc())
+    )
+    rows = result.scalars().all()
+    if len(rows) <= 12:
+        return
+
+    to_delete = rows[:-12]
+    old_ids = [r.id for r in to_delete]
+    await db.execute(
+        delete(ConversationLog).where(ConversationLog.id.in_(old_ids))
+    )
+
+    # Insert compact summary as a system role entry
+    summary_entry = ConversationLog(
+        user_id=user_id,
+        platform=platform,
+        session_id=session_id,
+        role="compact_summary",
+        content=f"[AUTO-COMPACT]\n{summary}",
+        tokens_estimate=estimate_tokens(summary),
+    )
+    db.add(summary_entry)
+    await db.commit()
+
+
 def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
