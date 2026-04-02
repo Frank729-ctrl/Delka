@@ -7,6 +7,7 @@ from services.providers.nvidia_provider import NvidiaProvider
 from services.providers.gemini_provider import GeminiProvider
 from services.providers.cerebras_provider import CerebrasProvider
 from security.security_logger import log_security_event
+from services.rate_limit_service import record_provider_failure, record_provider_success, is_provider_healthy
 
 # Provider registry — single instance of each
 PROVIDER_INSTANCES: dict[str, BaseProvider] = {
@@ -127,14 +128,20 @@ async def generate_full_response(
         if not provider.is_available():
             continue
 
+        if not is_provider_healthy(provider_name):
+            continue  # Skip providers known to be unhealthy
+
         try:
             text = await provider.generate_full(
                 system_prompt, user_prompt, model, temperature, max_tokens
             )
+            record_provider_success(provider_name)
             return text, provider_name, model
 
         except Exception as e:
-            if provider.is_rate_limit_error(e):
+            is_rl = provider.is_rate_limit_error(e)
+            record_provider_failure(provider_name, is_rate_limit=is_rl)
+            if is_rl:
                 next_providers = [
                     c["provider"] for c in chain
                     if c["provider"] != provider_name

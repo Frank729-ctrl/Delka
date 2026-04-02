@@ -31,6 +31,13 @@ from services.capability_router import route_capability
 from services.skills_service import detect_skill, run_skill
 from services.coordinator_service import needs_coordinator, run_coordinator
 from services.token_counter import should_compact, context_usage_ratio
+from services.relevant_memory_service import get_relevant_memories, format_memories_for_prompt
+from services.team_memory_service import get_team_context
+from services.context_analytics_service import analyze_context
+from services.tool_attribution_service import (
+    ToolUsage, build_attribution_footnote, detect_plugins_from_context
+)
+from services.tips_service import get_tip_for_user, get_shown_tips, mark_tip_shown, inject_tip_into_prompt
 from prompts.chat_prompt import build_chat_system_prompt
 
 _CHUNK_SIZE = 4
@@ -140,7 +147,7 @@ async def chat(
             ))
             return
 
-    # ── 8. Plugins + web search (parallel) ───────────────────────────────────
+    # ── 8. Plugins + web search + relevant memories (parallel) ───────────────
     context_hint = ""
     for entry in reversed(recent_history):
         if entry["role"] == "user" and len(entry["content"].split()) >= 3:
@@ -148,20 +155,19 @@ async def chat(
             break
 
     search_task = None
+    search_query_used = ""
     if needs_search(request.message):
-        query = extract_search_query(request.message, context_hint=context_hint)
-        search_task = asyncio.create_task(search(query))
+        search_query_used = extract_search_query(request.message, context_hint=context_hint)
+        search_task = asyncio.create_task(search(search_query_used))
 
-    plugin_context, search_context = await asyncio.gather(
+    plugin_context, search_context, relevant_mems, team_ctx = await asyncio.gather(
         run_plugins(request.message),
         search_task if search_task else _noop(),
+        get_relevant_memories(request.message, user_id, platform, db),
+        get_team_context(platform, db),
     )
 
-    # ── 9. Session memories ───────────────────────────────────────────────────
-    from services.session_memory_service import get_memories
-    session_memories = await get_memories(user_id, platform, db)
-
-    # ── 10. Build system prompt ───────────────────────────────────────────────
+    # ── 9. Build system prompt ────────────────────────────────────────────────
     system_prompt = build_chat_system_prompt(
         platform=platform,
         profile=profile,
@@ -170,12 +176,27 @@ async def chat(
         tone_analysis=tone_analysis,
         language_instruction=language_instruction,
     )
-    if session_memories:
-        system_prompt = f"{system_prompt}\n\n{session_memories}"
+
+    # Inject: team context → relevant memories → plugin context → search
+    if team_ctx:
+        system_prompt = f"{system_prompt}\n\n{team_ctx}"
+    mem_section = format_memories_for_prompt(relevant_mems)
+    if mem_section:
+        system_prompt = f"{system_prompt}\n\n{mem_section}"
     if plugin_context:
         system_prompt = f"{system_prompt}\n\n{plugin_context}"
     if search_context:
         system_prompt = f"{system_prompt}\n\n{search_context}"
+
+    # ── 9b. Tips (inject once per user, non-intrusively) ─────────────────────
+    profile_dict = profile.__dict__ if hasattr(profile, "__dict__") else {}
+    shown_tips = get_shown_tips(user_id, profile_dict)
+    msg_count = len(recent_history) // 2  # rough message count
+    tip_result = get_tip_for_user(user_id, msg_count, request.message, shown_tips)
+    if tip_result:
+        tip_id, tip_text = tip_result
+        system_prompt = inject_tip_into_prompt(system_prompt, tip_text)
+        mark_tip_shown(user_id, tip_id)
 
     # ── 11. Build messages with token awareness ───────────────────────────────
     from services.inference_service import get_task_chain
@@ -195,6 +216,18 @@ async def chat(
             user_id, platform, session_id, messages, current_model, db
         )
 
+    # ── 11b. Context analytics — warn before limit ────────────────────────────
+    ctx_breakdown = analyze_context(
+        system_prompt=system_prompt,
+        history=[m for m in messages if m["role"] != "system"],
+        current_message=request.message,
+        plugin_context=plugin_context,
+        search_context=search_context,
+        model=current_model,
+    )
+    if ctx_breakdown.is_critical:
+        yield f"data: {json.dumps({'type': 'context_warning', 'pct': ctx_breakdown.utilization_pct, 'msg': ctx_breakdown.warnings[0] if ctx_breakdown.warnings else ''})}\n\n"
+
     # ── 12. Stream from inference ─────────────────────────────────────────────
     tokens: list[str] = []
     async for token in _inference_stream("chat", messages):
@@ -203,10 +236,20 @@ async def chat(
 
     full_response = "".join(tokens)
 
-    # Send context usage stats (frontend can show a subtle indicator)
-    usage = context_usage_ratio(messages, current_model)
-    if usage > 0.6:
-        yield f"data: {json.dumps({'type': 'context_usage', 'pct': round(usage * 100)})}\n\n"
+    # ── 12b. Tool attribution footnote ────────────────────────────────────────
+    usage_obj = ToolUsage(
+        search_fired=bool(search_query_used),
+        search_query=search_query_used,
+        plugins_fired=detect_plugins_from_context(plugin_context),
+    )
+    attribution = build_attribution_footnote(usage_obj)
+    if attribution:
+        yield f"data: {attribution}\n\n"
+        full_response += attribution
+
+    # Send context usage stats (frontend can show a subtle bar)
+    if ctx_breakdown.utilization_pct > 60:
+        yield f"data: {json.dumps({'type': 'context_usage', 'pct': ctx_breakdown.utilization_pct})}\n\n"
 
     yield "data: [DONE]\n\n"
 

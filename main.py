@@ -47,6 +47,7 @@ from routers.translation_router import router as translation_router
 from routers.code_router import router as code_router
 from routers.detection_router import router as detection_router
 from routers.image_gen_router import router as image_gen_router
+from routers.doc_router import router as doc_router
 from utils.logger import request_logger
 
 _logger = logging.getLogger("delkaai.main")
@@ -169,4 +170,5 @@ app.include_router(translation_router,         tags=["Translation"])
 app.include_router(code_router,                tags=["Code Generation"])
 app.include_router(detection_router,           tags=["Object Detection"])
 app.include_router(image_gen_router,           tags=["Image Generation"])
+app.include_router(doc_router,                 tags=["Document Q&A"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST
