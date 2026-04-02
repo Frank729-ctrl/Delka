@@ -81,6 +81,8 @@ async def transcribe(
     language: str = "en",
     audio_format: str = "",
     context: str = "",
+    platform: str = "",
+    workspace_filenames: list[str] | None = None,
 ) -> TranscriptResult:
     """
     Transcribe audio. Returns a full TranscriptResult.
@@ -95,7 +97,12 @@ async def transcribe(
 
     fmt = _detect_format(audio_bytes, audio_format)
     mime = _FORMAT_MIME.get(fmt, "audio/mpeg")
-    whisper_prompt = build_whisper_prompt(context=context, language=language)
+    whisper_prompt = build_whisper_prompt(
+        context=context,
+        language=language,
+        platform=platform,
+        workspace_filenames=workspace_filenames,
+    )
 
     # ── Provider 1: Groq Whisper ──────────────────────────────────────────────
     if settings.GROQ_API_KEY:
