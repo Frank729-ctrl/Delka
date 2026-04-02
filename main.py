@@ -50,6 +50,10 @@ from routers.image_gen_router import router as image_gen_router
 from routers.doc_router import router as doc_router
 from routers.cron_router import router as cron_router
 from routers.analytics_router import router as analytics_router
+from routers.workspace_router import router as workspace_router
+from routers.notebook_router import router as notebook_router
+from routers.sandbox_router import router as sandbox_router
+from routers.diff_router import router as diff_router
 from utils.logger import request_logger
 
 _logger = logging.getLogger("delkaai.main")
@@ -182,4 +186,8 @@ app.include_router(image_gen_router,           tags=["Image Generation"])
 app.include_router(doc_router,                 tags=["Document Q&A"])
 app.include_router(cron_router,                tags=["Scheduled Tasks"])
 app.include_router(analytics_router,           tags=["Analytics"])
+app.include_router(workspace_router,           tags=["Document Workspace"])
+app.include_router(notebook_router,            tags=["Notebooks"])
+app.include_router(sandbox_router,             tags=["Code Sandbox"])
+app.include_router(diff_router,                tags=["Document Diff"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST

@@ -46,6 +46,8 @@ from services.plan_mode_service import needs_plan_mode, generate_plan, format_pl
 from services.policy_limits_service import check_and_increment, load_platform_limits
 from services.speculation_service import speculate_background
 from services.analytics_service import log_event, get_feature_flag
+from services.webfetch_service import needs_fetch, extract_url, fetch_url, build_fetch_context
+from services.workspace_service import needs_workspace, list_files, search_workspace, build_workspace_context
 from prompts.chat_prompt import build_chat_system_prompt
 
 _CHUNK_SIZE = 4
@@ -188,11 +190,27 @@ async def chat(
         search_query_used = extract_search_query(request.message, context_hint=context_hint)
         search_task = asyncio.create_task(search(search_query_used))
 
-    plugin_context, search_context, relevant_mems, team_ctx = await asyncio.gather(
+    # WebFetch: if message contains a URL to read, fetch it in parallel
+    fetch_task = None
+    if needs_fetch(request.message):
+        url = extract_url(request.message)
+        if url:
+            fetch_task = asyncio.create_task(fetch_url(url))
+
+    # Workspace: if message references user's files, load context
+    workspace_task = None
+    if needs_workspace(request.message):
+        workspace_task = asyncio.create_task(
+            search_workspace(user_id, platform, request.message[:100], db)
+        )
+
+    plugin_context, search_context, relevant_mems, team_ctx, fetch_result, workspace_results = await asyncio.gather(
         run_plugins(request.message),
         search_task if search_task else _noop(),
         get_relevant_memories(request.message, user_id, platform, db),
         get_team_context(platform, db),
+        fetch_task if fetch_task else _noop(),
+        workspace_task if workspace_task else _noop(),
     )
 
     # ── 9. Build system prompt ────────────────────────────────────────────────
@@ -215,6 +233,21 @@ async def chat(
         system_prompt = f"{system_prompt}\n\n{plugin_context}"
     if search_context:
         system_prompt = f"{system_prompt}\n\n{search_context}"
+
+    # WebFetch result
+    if fetch_result and isinstance(fetch_result, dict):
+        fetch_ctx = build_fetch_context(fetch_result)
+        if fetch_ctx:
+            system_prompt = f"{system_prompt}\n\n{fetch_ctx}"
+            log_event("webfetch_used", platform=platform, user_id=user_id,
+                      url=fetch_result.get("url", ""))
+
+    # Workspace search results
+    if workspace_results and isinstance(workspace_results, list):
+        workspace_files = await list_files(user_id, platform, db)
+        ws_ctx = build_workspace_context(workspace_files, workspace_results)
+        if ws_ctx:
+            system_prompt = f"{system_prompt}\n\n{ws_ctx}"
 
     # ── 9b. Adaptive length + user settings + tips ───────────────────────────
     # Adaptive length: auto-detect intent (brief/detailed/bullets/code-only)
@@ -268,13 +301,23 @@ async def chat(
     if ctx_breakdown.is_critical:
         yield f"data: {json.dumps({'type': 'context_warning', 'pct': ctx_breakdown.utilization_pct, 'msg': ctx_breakdown.warnings[0] if ctx_breakdown.warnings else ''})}\n\n"
 
-    # ── 12. Stream from inference ─────────────────────────────────────────────
+    # ── 12. Stream from inference with live LSP feedback ─────────────────────
+    from services.lsp_feedback_service import LSPStreamState, process_token, finalize as lsp_finalize
+    lsp_state = LSPStreamState()
     tokens: list[str] = []
+
     async for token in _inference_stream("chat", messages):
         tokens.append(token)
         yield f"data: {token}\n\n"
+        # Emit any LSP diagnostic events triggered by this token
+        for lsp_event in process_token(lsp_state, token):
+            yield lsp_event
 
     full_response = "".join(tokens)
+
+    # Final full LSP pass after streaming completes
+    for lsp_event in lsp_finalize(lsp_state, full_response):
+        yield lsp_event
 
     # ── 12b. Tool attribution footnote ────────────────────────────────────────
     usage_obj = ToolUsage(

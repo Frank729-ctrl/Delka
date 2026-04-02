@@ -68,6 +68,8 @@ async def create_all_tables() -> None:
         analytics_event_model,
         scheduled_task_model,
         user_settings_model,
+        workspace_file_model,
+        user_task_board_model,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

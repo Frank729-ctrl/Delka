@@ -6,6 +6,7 @@ import re
 from config import settings
 from services.inference_service import generate_full_response
 from services.code_diagnostics_service import diagnose_code, format_diagnostics
+from services.code_sandbox_service import execute_code, format_sandbox_result
 
 
 _SYSTEM_PROMPT = """\
@@ -56,11 +57,20 @@ async def generate_code(
         )
         code, detected_lang, explanation = _extract_code_and_explanation(text, language)
 
-        # Validate generated code before returning (diagnostics + security scan)
+        # Validate generated code (diagnostics + security scan)
         if code:
             diag = diagnose_code(code, detected_lang or language)
             diag_note = format_diagnostics(diag)
             explanation = f"{explanation}\n{diag_note}".strip() if explanation else diag_note
+
+        # Auto-run to prove it works (Python and JS only, only if no errors)
+        if code and not diag.has_errors:
+            lang_key = (detected_lang or language or "").lower()
+            if lang_key in ("python", "py", "javascript", "js"):
+                sandbox_result = await execute_code(code, lang_key)
+                if not sandbox_result.blocked:
+                    run_note = format_sandbox_result(sandbox_result)
+                    explanation = f"{explanation}\n{run_note}".strip() if explanation else run_note
 
         return code, detected_lang, explanation, provider, model
     except Exception:
