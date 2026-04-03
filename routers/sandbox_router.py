@@ -36,6 +36,7 @@ def _result_response(result) -> dict:
         "truncated": result.truncated,
         "blocked": result.blocked,
         "block_reason": result.block_reason,
+        "safety_warning": getattr(result, "safety_warning", ""),
         "formatted": format_sandbox_result(result),
     }
 

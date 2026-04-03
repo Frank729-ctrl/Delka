@@ -57,6 +57,7 @@ class SandboxResult:
     blocked: bool = False
     block_reason: str = ""
     language: str = ""
+    safety_warning: str = ""   # non-empty if LLM classifier flagged a warn verdict
 
 
 # ── Security pre-check ────────────────────────────────────────────────────────
@@ -267,6 +268,20 @@ async def run_bash(
         result.block_reason = block_reason
         return result
 
+    # ── Tier 2: LLM speculative safety classifier ─────────────────────────────
+    # Only fires for commands that passed the regex blocklist but look ambiguous.
+    # Fail-open: classifier timeout/error → proceed as safe.
+    from services.bash_safety_service import classify_command, format_warning
+    safety = await classify_command(command)
+    if safety.verdict == "block":
+        result.blocked = True
+        result.block_reason = f"Safety classifier blocked: {safety.reason}"
+        return result
+    if safety.verdict == "warn":
+        # Run the command but attach a warning to the result
+        result.safety_warning = format_warning(safety, command)
+    # safety.verdict == "safe" → proceed normally
+
     timeout = min(max(1, timeout), 30)   # clamp 1–30s
 
     env = {**_BASH_SAFE_ENV}
@@ -351,6 +366,8 @@ def format_sandbox_result(result: SandboxResult) -> str:
     """Format execution result as markdown to append to code response."""
     if result.blocked:
         return f"\n_🔒 Sandbox: {result.block_reason}_"
+    if result.safety_warning:
+        return f"\n{result.safety_warning}"
 
     lines = [f"\n**Execution result** _{result.language} · {result.execution_ms}ms_"]
 
