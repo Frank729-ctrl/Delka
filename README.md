@@ -27,6 +27,7 @@ A self-hosted AI API for Ghanaian professionals and businesses — built with Fa
 | **Document Diff** | Word and section-level diff between two document versions |
 | **Workspace** | Per-user cloud file store — upload, read, search, edit across sessions |
 | **Scheduled Tasks** | User-defined recurring AI tasks with webhook delivery |
+| **Background Tasks** | Spawn long-running agent tasks, poll status, stream output live |
 
 ---
 
@@ -180,6 +181,42 @@ User speaks → STT (Groq Whisper) → LLM → TTS (edge-tts Ghana voice) → Us
 
 ---
 
+## Background Tasks
+
+Spawn long-running agent tasks without blocking the chat stream. Equivalent to Claude Code's `TaskCreate`, `TaskList`, `TaskGet`, `TaskUpdate`, `TaskStop`, and `TaskOutput` tools.
+
+**State machine:** `pending → running → completed | failed | stopped`
+
+```bash
+# 1. Create and start a task
+curl -X POST http://localhost:8000/v1/tasks \
+  -H "X-DelkaAI-Key: fd-delka-sk-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Research market size",
+    "description": "Research the fintech market size in Ghana for 2024. Include number of active users, top players, and growth trends. Output a structured report.",
+    "active_form": "Researching Ghana fintech market",
+    "owner": "session-abc123"
+  }'
+# → { "data": { "task_id": "uuid-here", "status": "running", ... } }
+
+# 2. Stream output live (SSE)
+curl http://localhost:8000/v1/tasks/uuid-here/output \
+  -H "X-DelkaAI-Key: fd-delka-sk-..." \
+  -H "Accept: text/event-stream"
+# → data: {"line": "Researching Ghana fintech...", "index": 0}
+# → data: {"line": "Found: 18M mobile money users in 2024", "index": 1}
+# → data: {"done": true, "status": "completed"}
+
+# 3. Get the full result
+curl http://localhost:8000/v1/tasks/uuid-here \
+  -H "X-DelkaAI-Key: fd-delka-sk-..."
+```
+
+Tasks are in-memory (ephemeral per server run). Use `/v1/tasks/purge` to clean up completed tasks older than 1 hour.
+
+---
+
 ## Stack
 
 - **FastAPI** — API framework with SSE streaming
@@ -289,6 +326,17 @@ Keys are created via the admin endpoint using the master key.
 | `POST` | `/v1/notebook/sessions/{id}/run` | Run a cell |
 | `GET` | `/v1/notebook/sessions/{id}/export` | Export as .ipynb |
 
+### Background Tasks
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/tasks` | Create + start a background agent task |
+| `GET` | `/v1/tasks?owner={id}` | List all tasks for an owner |
+| `GET` | `/v1/tasks/{task_id}` | Get task detail + all output lines |
+| `PATCH` | `/v1/tasks/{task_id}` | Update subject, status, or metadata |
+| `DELETE` | `/v1/tasks/{task_id}` | Stop / cancel a running task |
+| `GET` | `/v1/tasks/{task_id}/output` | SSE stream of output lines (live) |
+| `POST` | `/v1/tasks/purge` | Remove old completed/failed tasks |
+
 ### Scheduled Tasks
 | Method | Path | Description |
 |---|---|---|
@@ -376,6 +424,20 @@ curl -X POST http://localhost:8000/v1/code/run \
   -H "X-DelkaAI-Key: fd-delka-sk-..." \
   -H "Content-Type: application/json" \
   -d '{"code": "print(sum(range(1, 101)))", "language": "python"}'
+```
+
+### Spawn a background agent task
+
+```bash
+curl -X POST http://localhost:8000/v1/tasks \
+  -H "X-DelkaAI-Key: fd-delka-sk-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Write unit tests",
+    "description": "Write pytest unit tests for a FastAPI endpoint that accepts a POST /v1/chat request with session_id, message, and platform fields.",
+    "active_form": "Writing unit tests",
+    "owner": "user-456"
+  }'
 ```
 
 ### Schedule a recurring AI task
