@@ -71,6 +71,7 @@ async def create_all_tables() -> None:
         workspace_file_model,
         user_task_board_model,
         platform_skill_model,
+        mcp_server_model,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

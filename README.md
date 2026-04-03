@@ -28,6 +28,7 @@ A self-hosted AI API for Ghanaian professionals and businesses — built with Fa
 | **Workspace** | Per-user cloud file store — upload, read, search, edit across sessions |
 | **Scheduled Tasks** | User-defined recurring AI tasks with webhook delivery |
 | **Background Tasks** | Spawn long-running agent tasks, poll status, stream output live |
+| **MCP** | Register external MCP servers (http/sse/stdio); 11 built-in tools + unlimited external |
 
 ---
 
@@ -178,6 +179,57 @@ User speaks → STT (Groq Whisper) → LLM → TTS (edge-tts Ghana voice) → Us
 | `GET /v1/voice/audio/{session_id}` | Fetch TTS audio after streaming |
 | `POST /v1/voice/transcribe` | STT only (with keyterm biasing + confidence score) |
 | `GET /v1/voice/keyterms` | List all Ghana + coding keyterms |
+
+---
+
+## MCP (Model Context Protocol)
+
+Delka's MCP system is a three-tier tool registry — built-in tools always available, plus any external MCP server you register via API.
+
+**Tool tiers:**
+1. **Built-in (11 tools)** — always on, no config: `web_search`, `calculate`, `get_weather`, `get_exchange_rate`, `lookup_bible`, `search_wikipedia`, `read_workspace_file`, `run_python`, `run_bash`, `glob_workspace`, `grep_workspace`
+2. **External servers** — register any http/sse/stdio/ws MCP server per platform
+3. **Agentic loop** — model emits tool calls → Delka executes → results fed back → repeat up to 5 turns
+
+**Transports supported:** `http`, `sse`, `stdio` (local subprocess), `ws`
+
+```bash
+# Register a GitHub MCP server (stdio transport)
+curl -X POST http://localhost:8000/v1/mcp/servers \
+  -H "X-DelkaAI-Key: fd-delka-sk-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "github",
+    "platform": "my-app",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..."},
+    "description": "GitHub issues, PRs, and repos"
+  }'
+
+# Register a hosted HTTP MCP server
+curl -X POST http://localhost:8000/v1/mcp/servers \
+  -H "X-DelkaAI-Key: fd-delka-sk-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-tools",
+    "platform": "my-app",
+    "transport": "http",
+    "url": "https://my-mcp-server.example.com",
+    "auth_token": "sk-..."
+  }'
+
+# List all tools available to your platform (built-in + registered servers)
+curl "http://localhost:8000/v1/mcp/tools?platform=my-app" \
+  -H "X-DelkaAI-Key: fd-delka-sk-..."
+
+# Call any tool directly
+curl -X POST http://localhost:8000/v1/mcp/tools/call \
+  -H "X-DelkaAI-Key: fd-delka-sk-..." \
+  -H "Content-Type: application/json" \
+  -d '{"tool_name": "web_search", "arguments": {"query": "Ghana GDP 2024"}, "platform": "my-app"}'
+```
 
 ---
 
@@ -354,6 +406,16 @@ Keys are created via the admin endpoint using the master key.
 | `POST` | `/v1/cron/tasks` | Create recurring task |
 | `GET` | `/v1/cron/tasks` | List tasks |
 | `DELETE` | `/v1/cron/tasks/{id}` | Delete task |
+
+### MCP (Model Context Protocol)
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/mcp/servers` | Register an external MCP server (http/sse/stdio/ws) |
+| `GET` | `/v1/mcp/servers?platform=…` | List registered servers |
+| `DELETE` | `/v1/mcp/servers/{name}?platform=…` | Deactivate a server |
+| `GET` | `/v1/mcp/tools?platform=…` | List all tools (built-in + registered servers) |
+| `POST` | `/v1/mcp/tools/call` | Call any tool directly |
+| `POST` | `/v1/mcp/servers/{name}/ping` | Test-connect + fetch server tool list |
 
 ### Analytics & Admin
 | Method | Path | Description |
