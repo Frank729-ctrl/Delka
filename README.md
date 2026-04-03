@@ -323,7 +323,8 @@ Keys are created via the admin endpoint using the master key.
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/v1/code/generate` | Generate code |
-| `POST` | `/v1/code/run` | Execute Python/JS in sandbox |
+| `POST` | `/v1/code/run` | Execute Python, JavaScript, or Bash in sandbox |
+| `POST` | `/v1/code/bash` | Run a shell command with timeout + env control |
 | `POST` | `/v1/notebook/sessions` | Create notebook session |
 | `POST` | `/v1/notebook/sessions/{id}/run` | Run a cell |
 | `GET` | `/v1/notebook/sessions/{id}/export` | Export as .ipynb |
@@ -426,6 +427,20 @@ curl -X POST http://localhost:8000/v1/code/run \
   -H "X-DelkaAI-Key: fd-delka-sk-..." \
   -H "Content-Type: application/json" \
   -d '{"code": "print(sum(range(1, 101)))", "language": "python"}'
+```
+
+### Run a shell command (Bash tool)
+
+```bash
+curl -X POST http://localhost:8000/v1/code/bash \
+  -H "X-DelkaAI-Key: fd-delka-sk-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ls -lh /tmp && echo hostname: $(hostname)",
+    "timeout": 10,
+    "description": "List files and print hostname"
+  }'
+# Blocked commands (rm -rf /, sudo, mkfs, curl|bash, eval…) return exit_code=0 blocked=true
 ```
 
 ### Spawn a background agent task

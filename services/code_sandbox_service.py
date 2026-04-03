@@ -1,21 +1,21 @@
 """
-Code Execution Sandbox — exceeds Claude Code's Bash tool.
+Code Execution Sandbox — ports Claude Code's Bash tool.
 
-src: Bash tool runs arbitrary shell commands in the user's environment.
-Delka: Safe sandboxed execution of generated Python and JavaScript code.
-       Uses subprocess with strict resource limits — no network, no file
-       writes outside /tmp, hard time and memory caps.
+src: Bash tool runs arbitrary shell commands in the user's local environment.
+Delka: Safe sandboxed execution of Python, JavaScript, and restricted shell
+       commands. Uses subprocess with strict safety filters, restricted PATH,
+       and hard time caps.
 
 Safety model:
-- Python: subprocess with timeout=10s, no shell=True, restricted env
-- JavaScript: Node.js subprocess, same restrictions
-- Blocked: shell commands, imports of os/subprocess/socket in user code
-- Output capped at 4000 chars
+- Python/JS: no shell=True, blocked dangerous imports
+- Bash: command-level blocklist (rm -rf /, sudo, mkfs, dd…), restricted PATH,
+        cwd locked to /tmp, timeout 15s, output capped at 8000 chars
+- All: run as current server user (non-root assumed), no Docker required
 
 Returns: stdout, stderr, exit_code, execution_time_ms, truncated flag.
 
 Used by: code_service (auto-runs generated code to verify it works),
-         notebook_service (cell execution), code_router (/v1/code/run).
+         notebook_service (cell execution), code_router, sandbox_router.
 """
 import asyncio
 import re
@@ -175,6 +175,157 @@ async def _run_subprocess(cmd: list[str], result: SandboxResult) -> SandboxResul
     return result
 
 
+# ── Bash sandbox ─────────────────────────────────────────────────────────────
+
+_BASH_TIMEOUT = 15  # seconds — longer than Python since shell tasks can be slower
+
+# Exact substring / pattern blocklist for shell commands.
+# These are irreversible or destructive operations with no legitimate sandbox use.
+_BASH_BLOCKED_PATTERNS = re.compile(
+    r"""
+    (
+        rm\s+-[a-z]*r[a-z]*\s+/          # rm -rf / or any recursive rm on /
+      | rm\s+-[a-z]*f[a-z]*\s+/          # rm -f /
+      | :\(\)\s*\{.*\|.*:.*\}            # fork bomb :(){ :|:& };:
+      | \bsudo\b                         # privilege escalation
+      | \bsu\s+root\b                    # switch to root
+      | \bchmod\s+[0-7]*7\s+/           # chmod 777 / etc.
+      | \bchown\b.*\s+/                  # chown on /
+      | \bmkfs\b                         # format filesystem
+      | \bdd\s+.*of=/dev/               # write to raw device
+      | \bshred\b                        # secure delete
+      | \bfdisk\b | \bparted\b           # partition editor
+      | \biptables\b | \bnftables\b      # firewall tampering
+      | \bkill\s+-9\s+-1\b              # kill all processes
+      | \bpkill\s+-9\b                   # mass process kill
+      | \breboot\b | \bshutdown\b | \bhalt\b | \bpoweroff\b
+      | \bcrontab\b                      # cron modification
+      | \bsystemctl\b | \bservice\b      # service control
+      | \bcurl\b.*\|\s*bash             # curl | bash pipe (arbitrary remote exec)
+      | \bwget\b.*\|\s*bash
+      | \beval\b                         # eval of dynamic string
+      | /etc/passwd | /etc/shadow        # sensitive system files
+      | /proc/sys | /sys/                # kernel interfaces
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Commands that are simply not available / not useful in a server sandbox
+_BASH_UNAVAILABLE = re.compile(
+    r"^\s*(vi|vim|nano|emacs|less|more|top|htop|man|screen|tmux)\b",
+    re.IGNORECASE,
+)
+
+_BASH_SAFE_ENV = {
+    "PATH": "/usr/local/bin:/usr/bin:/bin",
+    "HOME": "/tmp",
+    "TMPDIR": "/tmp",
+    "LANG": "en_US.UTF-8",
+    "TERM": "xterm-256color",
+}
+
+_BASH_MAX_OUTPUT = 8000
+
+
+def _check_bash_safety(command: str) -> Optional[str]:
+    if _BASH_BLOCKED_PATTERNS.search(command):
+        return "Command blocked: contains a destructive or privileged operation"
+    if _BASH_UNAVAILABLE.match(command):
+        return "Interactive programs (vim, less, top…) are not available in the sandbox"
+    # Guard against overly long commands (potential injection)
+    if len(command) > 2000:
+        return "Command too long (max 2,000 chars)"
+    return None
+
+
+async def run_bash(
+    command: str,
+    timeout: int = _BASH_TIMEOUT,
+    env_extras: dict | None = None,
+    cwd: str = "/tmp",
+) -> SandboxResult:
+    """
+    Execute a shell command in a restricted sandbox.
+    Ports Claude Code's BashTool — safe subset of shell access.
+
+    Args:
+        command:     The shell command to run (passed to bash -c)
+        timeout:     Max seconds (default 15, max 30)
+        env_extras:  Additional safe env vars to inject (no PATH override)
+        cwd:         Working directory, must be under /tmp (enforced)
+    """
+    result = SandboxResult(language="bash")
+
+    # Enforce safe cwd
+    import os.path as _op
+    cwd = cwd if cwd.startswith("/tmp") else "/tmp"
+
+    block_reason = _check_bash_safety(command)
+    if block_reason:
+        result.blocked = True
+        result.block_reason = block_reason
+        return result
+
+    timeout = min(max(1, timeout), 30)   # clamp 1–30s
+
+    env = {**_BASH_SAFE_ENV}
+    if env_extras:
+        # Only allow safe keys — no PATH, LD_PRELOAD, etc.
+        _safe_keys = re.compile(r"^[A-Z][A-Z0-9_]{0,30}$")
+        _blocked_env = {"PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "PYTHONPATH",
+                        "HOME", "SHELL", "USER", "LOGNAME"}
+        for k, v in env_extras.items():
+            if _safe_keys.match(k) and k not in _blocked_env:
+                env[k] = str(v)[:500]
+
+    start = time.time()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "/bin/bash", "-c", command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            cwd=cwd,
+        )
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            result.stderr = f"Command timed out after {timeout}s"
+            result.exit_code = 124
+            result.execution_ms = round((time.time() - start) * 1000, 1)
+            return result
+
+        result.execution_ms = round((time.time() - start) * 1000, 1)
+        result.exit_code = proc.returncode if proc.returncode is not None else 0
+
+        stdout = stdout_bytes.decode("utf-8", errors="replace")
+        stderr = stderr_bytes.decode("utf-8", errors="replace")
+
+        combined = stdout
+        if stderr.strip():
+            combined += f"\n[stderr]:\n{stderr}"
+
+        if len(combined) > _BASH_MAX_OUTPUT:
+            result.stdout = combined[:_BASH_MAX_OUTPUT]
+            result.truncated = True
+        else:
+            result.stdout = combined
+        result.stderr = stderr.strip()
+
+    except FileNotFoundError:
+        result.stderr = "/bin/bash not found on this system"
+        result.exit_code = 127
+    except Exception as exc:
+        result.stderr = str(exc)[:300]
+        result.exit_code = 1
+
+    return result
+
+
 # ── Main dispatch ─────────────────────────────────────────────────────────────
 
 async def execute_code(code: str, language: str) -> SandboxResult:
@@ -187,10 +338,12 @@ async def execute_code(code: str, language: str) -> SandboxResult:
         return await run_python(code)
     elif lang in ("javascript", "js", "node", "nodejs"):
         return await run_javascript(code)
+    elif lang in ("bash", "sh", "shell"):
+        return await run_bash(code)
     else:
         result = SandboxResult(language=lang)
         result.blocked = True
-        result.block_reason = f"Language '{lang}' not supported in sandbox (Python and JavaScript only)"
+        result.block_reason = f"Language '{lang}' not supported in sandbox (python, javascript, bash)"
         return result
 
 
