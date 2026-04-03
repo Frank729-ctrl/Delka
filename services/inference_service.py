@@ -1,6 +1,17 @@
+from contextvars import ContextVar
 from typing import AsyncGenerator
 from fastapi import HTTPException
 from services.providers.base_provider import BaseProvider
+
+# Tracks which provider+model was used in the most recent stream call —
+# written by generate_stream_response, read by chat_service after streaming done.
+_last_stream_provider: ContextVar[str] = ContextVar("_last_stream_provider", default="")
+_last_stream_model: ContextVar[str] = ContextVar("_last_stream_model", default="")
+
+
+def get_last_stream_provider() -> tuple[str, str]:
+    """Return (provider, model) used in the most recent generate_stream_response call."""
+    return _last_stream_provider.get(), _last_stream_model.get()
 from services.providers.groq_provider import GroqProvider
 from services.providers.ollama_provider import OllamaProvider
 from services.providers.nvidia_provider import NvidiaProvider
@@ -236,6 +247,8 @@ async def generate_stream_response(
                         first_token = token
                         break
                     if first_token is not None:
+                        _last_stream_provider.set(provider_name)
+                        _last_stream_model.set(model)
                         yield first_token
                         async for token in gen:
                             yield token
@@ -267,6 +280,8 @@ async def generate_stream_response(
                 break
 
             if first_token is not None:
+                _last_stream_provider.set(provider_name)
+                _last_stream_model.set(model)
                 yield first_token
                 async for token in gen:
                     yield token

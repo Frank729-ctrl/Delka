@@ -10,6 +10,14 @@ async def store_message(
     role: str,
     content: str,
     db: AsyncSession,
+    *,
+    provider: str | None = None,
+    model_name: str | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    cost_usd: float | None = None,
+    effort_tier: str | None = None,
+    latency_ms: float | None = None,
 ) -> None:
     from models.conversation_log_model import ConversationLog
 
@@ -20,6 +28,13 @@ async def store_message(
         role=role,
         content=content,
         tokens_estimate=estimate_tokens(content),
+        provider=provider,
+        model_name=model_name,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
+        effort_tier=effort_tier,
+        latency_ms=latency_ms,
     )
     db.add(entry)
     await db.commit()
@@ -50,7 +65,20 @@ async def get_recent_history(
     rows = result.scalars().all()
     # Reverse to oldest-first for prompt injection
     return [
-        {"role": r.role, "content": r.content, "created_at": str(r.created_at)}
+        {
+            "role": r.role,
+            "content": r.content,
+            "created_at": str(r.created_at),
+            "meta": {
+                "provider": r.provider,
+                "model": r.model_name,
+                "input_tokens": r.input_tokens,
+                "output_tokens": r.output_tokens,
+                "cost_usd": r.cost_usd,
+                "effort_tier": r.effort_tier,
+                "latency_ms": r.latency_ms,
+            } if r.provider or r.model_name else None,
+        }
         for r in reversed(rows)
         if r.role in ("user", "assistant")
     ]
@@ -73,7 +101,21 @@ async def get_session_history(
     )
     rows = result.scalars().all()
     return [
-        {"role": r.role, "content": r.content, "created_at": str(r.created_at)}
+        {
+            "id": r.id,
+            "role": r.role,
+            "content": r.content,
+            "created_at": str(r.created_at),
+            "meta": {
+                "provider": r.provider,
+                "model": r.model_name,
+                "input_tokens": r.input_tokens,
+                "output_tokens": r.output_tokens,
+                "cost_usd": r.cost_usd,
+                "effort_tier": r.effort_tier,
+                "latency_ms": r.latency_ms,
+            } if r.provider or r.model_name else None,
+        }
         for r in rows
     ]
 

@@ -169,6 +169,28 @@ async def chat(
         }, db)
         return
 
+    # ── 5b. Clarification check — gate on vague requests before spending tokens ─
+    from services.clarification_service import (
+        check_needs_clarification, generate_clarifications, format_clarification_response,
+    )
+    clarification = await check_needs_clarification(
+        request.message,
+        history_length=len(recent_history),
+        use_llm=True,
+    )
+    if clarification.needs_clarification:
+        questions = clarification.questions or await generate_clarifications(
+            request.message,
+            context=recent_history[-1]["content"] if recent_history else "",
+        )
+        if questions:
+            event = format_clarification_response(questions, clarification.reason)
+            yield f"data: {json.dumps(event)}\n\n"
+            yield "data: [DONE]\n\n"
+            log_event("clarification_triggered", platform=platform, user_id=user_id,
+                      reason=clarification.reason, question_count=len(questions))
+            return
+
     # ── 6. Capability routing (image gen, code, translation) ──────────────────
     capability_result = await route_capability(request.message)
     if capability_result:
@@ -406,6 +428,10 @@ async def chat(
 
     full_response = "".join(tokens)
 
+    # Capture which provider/model streamed this response (for per-message metadata)
+    from services.inference_service import get_last_stream_provider
+    _used_provider, _used_model = get_last_stream_provider()
+
     # Post-process: enforce style on the assembled response (json/plain/brief/code_only)
     processed = post_process(full_response, style_result.style)
     if processed != full_response:
@@ -451,6 +477,9 @@ async def chat(
         request.message, full_response,
         recent_history, profile, db,
         can_write_memory=perm_profile.can_write_memory,
+        provider=_used_provider,
+        model_name=_used_model,
+        effort_tier=effort.tier,
     ))
 
 
@@ -464,18 +493,32 @@ async def _post_reply_tasks(
     profile,
     db: AsyncSession,
     can_write_memory: bool = True,
+    provider: str = "",
+    model_name: str = "",
+    effort_tier: str = "",
 ) -> None:
     """
     All post-reply work runs here as a background task.
     None of this blocks the streamed response.
     """
     try:
-        # Persist messages
+        # Persist messages — assistant message carries per-message metadata
+        from services.cost_tracker import estimate_tokens, calculate_cost
+        in_tok = estimate_tokens(user_message)
+        out_tok = estimate_tokens(assistant_reply)
+        cost, _ = calculate_cost(model_name, in_tok, out_tok) if model_name else (None, None)
+
         await conversation_history_service.store_message(
             user_id, platform, session_id, "user", user_message, db
         )
         await conversation_history_service.store_message(
-            user_id, platform, session_id, "assistant", assistant_reply, db
+            user_id, platform, session_id, "assistant", assistant_reply, db,
+            provider=provider or None,
+            model_name=model_name or None,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            cost_usd=cost,
+            effort_tier=effort_tier or None,
         )
 
         # Update structured memory profile (skip if memory writes are blocked)
