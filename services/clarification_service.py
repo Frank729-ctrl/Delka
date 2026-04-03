@@ -183,7 +183,7 @@ async def check_needs_clarification(
 
         response, _, _ = await asyncio.wait_for(
             generate_full_response(
-                task="chat",
+                task="support",   # faster chain than "chat" — classifiers don't need quality
                 system_prompt=_CLARIFICATION_SYSTEM,
                 user_prompt=f"Analyze this request:\n{message}",
                 temperature=0.0,
@@ -227,7 +227,7 @@ async def generate_clarifications(
         ctx_block = f"\nRecent context:\n{context[:300]}" if context else ""
         response, _, _ = await asyncio.wait_for(
             generate_full_response(
-                task="chat",
+                task="support",
                 system_prompt=_CLARIFICATION_SYSTEM,
                 user_prompt=f"Generate clarifying questions for this vague request:{ctx_block}\n\nRequest: {message}",
                 temperature=0.2,

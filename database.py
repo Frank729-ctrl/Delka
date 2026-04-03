@@ -74,6 +74,8 @@ async def create_all_tables() -> None:
         mcp_server_model,
         hook_subscription_model,
         session_checkpoint_model,
+        tool_audit_model,
+        response_version_model,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -90,6 +92,21 @@ async def create_all_tables() -> None:
         "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS cost_usd FLOAT",
         "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS effort_tier VARCHAR(20)",
         "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS latency_ms FLOAT",
+        # Widen role column: VARCHAR(10) can't hold "compact_summary" (15 chars)
+        "ALTER TABLE conversation_logs ALTER COLUMN role TYPE VARCHAR(20)",
+        # Session shares table (created by session_share_service on first use,
+        # but also ensure it exists at startup)
+        """CREATE TABLE IF NOT EXISTS session_shares (
+            id SERIAL PRIMARY KEY,
+            code VARCHAR(16) UNIQUE NOT NULL,
+            owner_id VARCHAR(100) NOT NULL,
+            platform VARCHAR(50) NOT NULL,
+            session_id VARCHAR(100) NOT NULL,
+            snapshot JSONB NOT NULL,
+            expires_at BIGINT,
+            include_meta BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )""",
     ]
     async with engine.begin() as conn:
         for sql in _additive_migrations:

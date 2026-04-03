@@ -98,3 +98,79 @@ async def analyze_session(req: AnalyzeRequest, db: AsyncSession = Depends(get_db
         return {"status": "ok", "markdown": format_insight_markdown(insight)}
 
     return {"status": "ok", "data": asdict(insight)}
+
+
+# ── Export ────────────────────────────────────────────────────────────────────
+
+@router.get("/export", summary="Export a conversation session as markdown, JSON, or plain text")
+async def export_session(
+    user_id: str,
+    platform: str,
+    session_id: str,
+    format: str = "markdown",
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi.responses import Response as FastResponse
+    from services.conversation_export_service import export_session as _export, ExportFormat
+
+    fmt: ExportFormat = format if format in ("markdown", "json", "plain") else "markdown"
+    content, content_type = await _export(user_id, platform, session_id, fmt, db)
+
+    filename = f"conversation-{session_id[:12]}.{{'markdown':'md','json':'json','plain':'txt'}[fmt]}"
+    return FastResponse(
+        content=content,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Response versioning ───────────────────────────────────────────────────────
+
+class SelectVersionRequest(BaseModel):
+    user_id: str
+
+
+@router.get("/versions", summary="List response versions for a user message")
+async def list_versions(
+    user_id: str,
+    platform: str,
+    session_id: str,
+    user_message: str,
+    db: AsyncSession = Depends(get_db),
+):
+    from services.response_version_service import get_versions
+    versions = await get_versions(user_id, session_id, user_message, db)
+    return {"status": "ok", "data": versions, "count": len(versions)}
+
+
+@router.get("/versions/all", summary="List all messages with multiple response versions")
+async def list_all_versions(
+    user_id: str,
+    platform: str,
+    session_id: Optional[str] = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    from services.response_version_service import list_all_versions as _list
+    versions = await _list(user_id, platform, db, session_id=session_id, limit=limit)
+    return {"status": "ok", "data": versions, "count": len(versions)}
+
+
+@router.post("/versions/{version_id}/select", summary="Mark a response version as preferred")
+async def select_version(version_id: int, req: SelectVersionRequest, db: AsyncSession = Depends(get_db)):
+    from services.response_version_service import select_version as _select
+    ok = await _select(version_id, req.user_id, db)
+    if not ok:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Version {version_id} not found")
+    return {"status": "ok", "selected": version_id}
+
+
+# ── Budget status ─────────────────────────────────────────────────────────────
+
+@router.get("/budget", summary="Get current monthly token budget status for a user")
+async def get_budget(user_id: str, platform: str, db: AsyncSession = Depends(get_db)):
+    from services.policy_limits_service import get_user_budget_status, load_platform_limits
+    limits = await load_platform_limits(platform, db)
+    status = get_user_budget_status(user_id, limits)
+    return {"status": "ok", "data": status}

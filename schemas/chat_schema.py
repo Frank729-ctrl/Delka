@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     output_style: Optional[str] = None  # auto|brief|detailed|bullets|numbered|narrative|
                                         # code_only|table|json|plain|academic|slack|executive
     permission_mode: Optional[str] = None  # auto|manual|readonly|sandbox|restricted
+    json_schema: Optional[dict] = None    # if set, response is validated against this JSON Schema
 
 
 class ChatMetadata(BaseModel):

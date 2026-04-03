@@ -344,6 +344,14 @@ async def chat(
         system_prompt = inject_tip_into_prompt(system_prompt, tip_text)
         mark_tip_shown(user_id, tip_id)
 
+    # ── 9b2. Structured output — inject schema requirement into system prompt ─
+    json_schema = getattr(request, "json_schema", None)
+    if json_schema:
+        from services.structured_output_service import build_schema_instruction
+        schema_instr = build_schema_instruction(json_schema)
+        if schema_instr:
+            system_prompt = f"{schema_instr}\n\n{system_prompt}"
+
     # ── 9c. Permission mode — inject restrictions into system prompt ─────────
     from services.permission_service import (
         resolve_permission, permission_instruction, get_platform_permission_mode,
@@ -415,6 +423,16 @@ async def chat(
         yield f"data: {json.dumps({'type': 'context_warning', 'pct': ctx_breakdown.utilization_pct, 'msg': ctx_breakdown.warnings[0] if ctx_breakdown.warnings else ''})}\n\n"
 
     # ── 12. Stream from inference with live LSP feedback ─────────────────────
+    # Start speculation in parallel with main stream — by the time streaming
+    # finishes, follow-up questions are likely already cached.
+    _speculation_task = None
+    if get_feature_flag("speculation", True) and len(recent_history) > 0:
+        last_reply = recent_history[-1]["content"] if recent_history[-1]["role"] == "assistant" else ""
+        if last_reply:
+            _speculation_task = asyncio.create_task(
+                speculate_background(session_id, last_reply, platform)
+            )
+
     from services.lsp_feedback_service import LSPStreamState, process_token, finalize as lsp_finalize
     lsp_state = LSPStreamState()
     tokens: list[str] = []
@@ -442,6 +460,19 @@ async def chat(
     # Final full LSP pass after streaming completes
     for lsp_event in lsp_finalize(lsp_state, full_response):
         yield lsp_event
+
+    # ── 12b2. Structured output enforcement — validate schema if requested ────
+    if json_schema:
+        from services.structured_output_service import enforce_schema
+        schema_result = await enforce_schema(full_response, json_schema, request.message)
+        yield f"data: {json.dumps({'type': 'structured', **schema_result})}\n\n"
+
+    # ── 12c. Streaming artifacts — emit renderable content as typed events ───
+    from services.artifact_service import has_artifacts, extract_artifacts, format_artifact_event
+    if has_artifacts(full_response):
+        for artifact in extract_artifacts(full_response):
+            yield f"data: {json.dumps(format_artifact_event(artifact))}\n\n"
+        log_event("artifacts_emitted", platform=platform, user_id=user_id)
 
     # ── 12b. Tool attribution footnote ────────────────────────────────────────
     usage_obj = ToolUsage(
@@ -480,6 +511,7 @@ async def chat(
         provider=_used_provider,
         model_name=_used_model,
         effort_tier=effort.tier,
+        output_style=style_result.style,
     ))
 
 
@@ -496,6 +528,7 @@ async def _post_reply_tasks(
     provider: str = "",
     model_name: str = "",
     effort_tier: str = "",
+    output_style: str = "",
 ) -> None:
     """
     All post-reply work runs here as a background task.
@@ -576,6 +609,27 @@ async def _post_reply_tasks(
                 assistant_reply=assistant_reply,
                 platform=platform,
             ))
+
+        # Response versioning — save every response so user can compare alternatives
+        from services.response_version_service import save_response_version
+        await save_response_version(
+            user_id=user_id,
+            platform=platform,
+            session_id=session_id,
+            user_message=user_message,
+            response=assistant_reply,
+            db=db,
+            provider=provider,
+            model_name=model_name,
+            effort_tier=effort_tier,
+            output_style=output_style,
+            tokens=in_tok + out_tok,
+            cost_usd=cost or 0.0,
+        )
+
+        # Update monthly budget tracker with actual usage
+        from services.policy_limits_service import record_user_token_usage
+        record_user_token_usage(user_id, in_tok + out_tok, cost or 0.0)
 
         # Log request completion event
         log_event("request_completed", platform=platform, user_id=user_id, service="chat")

@@ -63,6 +63,8 @@ from routers.hook_router import router as hook_router
 from routers.memory_router import router as memory_router
 from routers.permission_router import router as permission_router
 from routers.checkpoint_router import router as checkpoint_router
+from routers.audit_router import router as audit_router
+from routers.share_router import router as share_router
 from utils.logger import request_logger
 
 _logger = logging.getLogger("delkaai.main")
@@ -213,4 +215,6 @@ app.include_router(hook_router,                tags=["Hooks"])
 app.include_router(memory_router,              tags=["Memory"])
 app.include_router(permission_router,          tags=["Permissions"])
 app.include_router(checkpoint_router,          tags=["Session Checkpoints"])
+app.include_router(audit_router,               tags=["Tool Audit"])
+app.include_router(share_router,               tags=["Session Sharing"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST
