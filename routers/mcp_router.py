@@ -20,6 +20,7 @@ from sqlalchemy import text
 from database import get_db
 from services.mcp_service import get_all_tools, execute_tool, BUILTIN_TOOLS
 from services.mcp_client_service import list_tools as client_list_tools
+from services.tool_search_service import search_tools, build_tool_search_response
 
 router = APIRouter(prefix="/v1/mcp")
 
@@ -139,6 +140,29 @@ async def api_list_tools(platform: str = "", db: AsyncSession = Depends(get_db))
             "builtin_count": len(BUILTIN_TOOLS),
             "external_count": len(cleaned) - len(BUILTIN_TOOLS),
         },
+    }
+
+
+@router.get("/tools/search", summary="Search tools by keyword")
+async def api_search_tools(
+    q: str = "",
+    platform: str = "",
+    max_results: int = 10,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Fuzzy keyword search across all available tools (built-in + registered MCP servers).
+    Ports Claude Code's ToolSearchTool — always-on, no deferred invocation needed.
+    """
+    tools = await get_all_tools(platform, db)
+    results = search_tools(tools, q, max_results=max_results)
+    cleaned = [{k: v for k, v in t.items() if not k.startswith("_")} for t in results]
+    return {
+        "status": "ok",
+        "query": q,
+        "results": cleaned,
+        "count": len(cleaned),
+        "formatted": build_tool_search_response(tools, query=q),
     }
 
 

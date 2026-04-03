@@ -32,6 +32,7 @@ from services.skills_service import detect_skill, run_skill, get_skills_context
 from services.effort_service import estimate_effort, effort_metadata
 from services.output_style_service import resolve_style, post_process, VALID_STYLES
 from services.hook_service import fire_background
+from services.tool_search_service import needs_tool_search, build_tool_manifest
 from services.coordinator_service import needs_coordinator, run_coordinator
 from services.token_counter import should_compact, context_usage_ratio
 from services.relevant_memory_service import get_relevant_memories, format_memories_for_prompt
@@ -317,6 +318,16 @@ async def chat(
     skills_ctx = get_skills_context()
     if skills_ctx:
         system_prompt = f"{system_prompt}\n\n{skills_ctx}"
+
+    # Tool manifest — inject when user is asking about capabilities (passive discovery)
+    if needs_tool_search(request.message):
+        from services.mcp_service import get_all_tools
+        all_tools = await get_all_tools(platform, db)
+        tool_manifest = build_tool_manifest(all_tools, max_tools=20)
+        if tool_manifest:
+            system_prompt = f"{system_prompt}\n\n{tool_manifest}"
+        log_event("tool_search_injected", platform=platform, user_id=user_id,
+                  tool_count=len(all_tools))
 
     # ── 11. Build messages with token awareness ───────────────────────────────
     from services.inference_service import get_task_chain

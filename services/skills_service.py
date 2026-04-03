@@ -36,6 +36,14 @@ _BUNDLED: list[dict] = [
         "argument_hint": "",
     },
     {
+        "name": "tools",
+        "description": "Search and list all available AI tools (built-in + MCP servers)",
+        "prompt_template": "",   # handled specially in run_skill
+        "aliases": ["capabilities", "what-can-you-do"],
+        "argument_hint": "[optional search query]",
+        "when_to_use": "When the user asks what you can do, what tools are available, or how to do something specific",
+    },
+    {
         "name": "summarize",
         "description": "Summarize text into key points",
         "prompt_template": (
@@ -221,6 +229,17 @@ async def run_skill(skill_name: str, args: str, platform: str, db=None) -> dict:
 
     if skill_name == "help":
         return {"type": "skill_help", "content": _build_help_text()}
+
+    if skill_name == "tools":
+        from services.mcp_service import get_all_tools
+        from services.tool_search_service import build_tool_search_response
+        all_tools = await get_all_tools(platform, db)
+        return {
+            "type": "skill_result",
+            "skill": "tools",
+            "content": build_tool_search_response(all_tools, query=args),
+            "source": "builtin",
+        }
 
     # Refresh DB skills if db provided
     if db and platform:
