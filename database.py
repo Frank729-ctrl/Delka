@@ -72,6 +72,7 @@ async def create_all_tables() -> None:
         user_task_board_model,
         platform_skill_model,
         mcp_server_model,
+        hook_subscription_model,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

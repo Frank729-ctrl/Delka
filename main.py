@@ -59,6 +59,7 @@ from routers.skills_router import router as skills_router
 from routers.task_router import router as task_router
 from routers.remote_router import router as remote_router
 from routers.mcp_router import router as mcp_router
+from routers.hook_router import router as hook_router
 from utils.logger import request_logger
 
 _logger = logging.getLogger("delkaai.main")
@@ -205,4 +206,5 @@ app.include_router(skills_router,              tags=["Skills"])
 app.include_router(task_router,                tags=["Tasks"])
 app.include_router(remote_router,              tags=["Remote Sessions"])
 app.include_router(mcp_router,                 tags=["MCP"])
+app.include_router(hook_router,                tags=["Hooks"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST

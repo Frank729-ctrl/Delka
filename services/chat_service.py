@@ -31,6 +31,7 @@ from services.capability_router import route_capability
 from services.skills_service import detect_skill, run_skill, get_skills_context
 from services.effort_service import estimate_effort, effort_metadata
 from services.output_style_service import resolve_style, post_process, VALID_STYLES
+from services.hook_service import fire_background
 from services.coordinator_service import needs_coordinator, run_coordinator
 from services.token_counter import should_compact, context_usage_ratio
 from services.relevant_memory_service import get_relevant_memories, format_memories_for_prompt
@@ -83,6 +84,12 @@ async def chat(
         yield f"data: {json.dumps({'type': 'error', 'content': limit_reason})}\n\n"
         yield "data: [DONE]\n\n"
         return
+
+    # ── 1c. pre_chat hook — fire before any processing ───────────────────────
+    fire_background("pre_chat", platform, user_id, session_id, {
+        "message": request.message[:500],
+        "history_length": len(recent_history),
+    }, db)
 
     # ── 2. Away summary — if user was gone > 30 min, show recap first ─────────
     from services.away_summary_service import get_away_summary
@@ -151,6 +158,10 @@ async def chat(
         )
         yield f"data: {json.dumps({'type': result['type'], 'content': content})}\n\n"
         yield "data: [DONE]\n\n"
+        fire_background("post_skill", platform, user_id, session_id, {
+            "skill": skill_name, "args": skill_args,
+            "result_type": result["type"], "content_preview": content[:200],
+        }, db)
         return
 
     # ── 6. Capability routing (image gen, code, translation) ──────────────────
@@ -375,6 +386,17 @@ async def chat(
 
     yield "data: [DONE]\n\n"
 
+    # ── post_chat hook ────────────────────────────────────────────────────────
+    fire_background("post_chat", platform, user_id, session_id, {
+        "message_preview": request.message[:200],
+        "response_preview": full_response[:200],
+        "response_length": len(full_response),
+        "effort_tier": effort.tier,
+        "output_style": style_result.style,
+        "search_fired": bool(search_query_used),
+        "context_pct": ctx_breakdown.utilization_pct,
+    }, db)
+
     # ── 13. Background tasks (non-blocking) ───────────────────────────────────
     asyncio.create_task(_post_reply_tasks(
         user_id, platform, session_id,
@@ -414,7 +436,7 @@ async def _post_reply_tasks(
 
         # Background: extract session memories from this exchange
         from services.session_memory_service import extract_and_store
-        await extract_and_store(
+        memory_result = await extract_and_store(
             user_id, platform, session_id,
             recent_history + [
                 {"role": "user", "content": user_message},
@@ -422,6 +444,11 @@ async def _post_reply_tasks(
             ],
             db,
         )
+        # post_memory hook — fire after extraction completes
+        fire_background("post_memory", platform, user_id, session_id, {
+            "extracted": bool(memory_result),
+            "preview": str(memory_result)[:300] if memory_result else "",
+        }, db)
 
         # Background: AutoDream consolidation (checks its own gate)
         from services.auto_dream_service import maybe_dream
