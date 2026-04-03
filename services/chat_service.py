@@ -85,11 +85,15 @@ async def chat(
         yield "data: [DONE]\n\n"
         return
 
-    # ── 1c. pre_chat hook — fire before any processing ───────────────────────
+    # ── 1c. pre_chat hook + session_start (first message only) ──────────────
     fire_background("pre_chat", platform, user_id, session_id, {
         "message": request.message[:500],
         "history_length": len(recent_history),
     }, db)
+    if not recent_history:
+        fire_background("session_start", platform, user_id, session_id, {
+            "first_message": request.message[:500],
+        }, db)
 
     # ── 2. Away summary — if user was gone > 30 min, show recap first ─────────
     from services.away_summary_service import get_away_summary
