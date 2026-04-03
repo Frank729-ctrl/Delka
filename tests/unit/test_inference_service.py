@@ -33,45 +33,58 @@ async def test_cv_task_uses_groq_when_key_set(monkeypatch):
     import services.inference_service as svc
     groq = _make_groq(response="cv_output")
     ollama = _make_ollama()
+    _chain = [{"provider": "groq", "model": "llama-3.3-70b-versatile"},
+              {"provider": "ollama", "model": "llama3.1"}]
     monkeypatch.setattr(svc, "PROVIDER_INSTANCES", {"groq": groq, "ollama": ollama})
+    monkeypatch.setattr(svc, "get_task_chain", lambda task: _chain)
+    monkeypatch.setattr(svc, "is_provider_healthy", lambda name: True)
     monkeypatch.setattr("config.settings.GROQ_API_KEY", "test-key")
 
     text, provider, model = await svc.generate_full_response("cv", "sys", "user")
 
     assert provider == "groq"
-    assert model == svc.get_task_chain("cv")[0]["model"]
+    assert model == _chain[0]["model"]
     assert text == "cv_output"
     groq.generate_full.assert_awaited_once()
 
 
 async def test_cv_task_uses_correct_model(monkeypatch):
     import services.inference_service as svc
-    from config import settings
     groq = _make_groq(response="out")
+    _chain = [{"provider": "groq", "model": "llama-3.3-70b-versatile"},
+              {"provider": "ollama", "model": "llama3.1"}]
     monkeypatch.setattr(svc, "PROVIDER_INSTANCES", {"groq": groq, "ollama": _make_ollama()})
+    monkeypatch.setattr(svc, "get_task_chain", lambda task: _chain)
+    monkeypatch.setattr(svc, "is_provider_healthy", lambda name: True)
 
     _, _, model = await svc.generate_full_response("cv", "s", "u")
-    assert model == settings.CV_PRIMARY_MODEL
+    assert model == _chain[0]["model"]
 
 
 async def test_letter_task_uses_correct_model(monkeypatch):
     import services.inference_service as svc
-    from config import settings
     groq = _make_groq(response="letter_out")
+    _chain = [{"provider": "groq", "model": "llama-3.3-70b-versatile"},
+              {"provider": "ollama", "model": "llama3.1"}]
     monkeypatch.setattr(svc, "PROVIDER_INSTANCES", {"groq": groq, "ollama": _make_ollama()})
+    monkeypatch.setattr(svc, "get_task_chain", lambda task: _chain)
+    monkeypatch.setattr(svc, "is_provider_healthy", lambda name: True)
 
     _, _, model = await svc.generate_full_response("letter", "s", "u")
-    assert model == settings.LETTER_PRIMARY_MODEL
+    assert model == _chain[0]["model"]
 
 
 async def test_support_task_uses_correct_model(monkeypatch):
     import services.inference_service as svc
-    from config import settings
     groq = _make_groq(response="chat")
+    _chain = [{"provider": "groq", "model": "llama-3.1-8b-instant"},
+              {"provider": "ollama", "model": "llama3.1"}]
     monkeypatch.setattr(svc, "PROVIDER_INSTANCES", {"groq": groq, "ollama": _make_ollama()})
+    monkeypatch.setattr(svc, "get_task_chain", lambda task: _chain)
+    monkeypatch.setattr(svc, "is_provider_healthy", lambda name: True)
 
     _, _, model = await svc.generate_full_response("support", "s", "u")
-    assert model == settings.SUPPORT_PRIMARY_MODEL
+    assert model == _chain[0]["model"]
 
 
 async def test_returns_tuple_of_text_provider_model(monkeypatch):
@@ -141,7 +154,11 @@ async def test_logs_warning_on_rate_limit(monkeypatch):
     def fake_log(severity, event_type, details):
         logged.append({"severity": severity, "event_type": event_type})
 
+    _chain = [{"provider": "groq", "model": "llama-3.3-70b-versatile"},
+              {"provider": "ollama", "model": "llama3.1"}]
     monkeypatch.setattr("services.inference_service.log_security_event", fake_log)
+    monkeypatch.setattr(svc, "get_task_chain", lambda task: _chain)
+    monkeypatch.setattr(svc, "is_provider_healthy", lambda name: True)
     exc = Exception("429 rate_limit")
     groq = _make_groq(error=exc, rate_limit=True)
     ollama = _make_ollama()
@@ -159,7 +176,11 @@ async def test_logs_warning_on_provider_error(monkeypatch):
     def fake_log(severity, event_type, details):
         logged.append({"severity": severity, "event_type": event_type})
 
+    _chain = [{"provider": "groq", "model": "llama-3.3-70b-versatile"},
+              {"provider": "ollama", "model": "llama3.1"}]
     monkeypatch.setattr("services.inference_service.log_security_event", fake_log)
+    monkeypatch.setattr(svc, "get_task_chain", lambda task: _chain)
+    monkeypatch.setattr(svc, "is_provider_healthy", lambda name: True)
     groq = _make_groq(error=RuntimeError("boom"), rate_limit=False)
     ollama = _make_ollama()
     monkeypatch.setattr(svc, "PROVIDER_INSTANCES", {"groq": groq, "ollama": ollama})

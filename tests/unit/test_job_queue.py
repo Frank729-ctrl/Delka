@@ -63,8 +63,8 @@ async def test_process_one_cv_job_marks_complete(test_db):
 
     fake_pdf = b"%PDF-1.4 fake"
 
-    async def fake_pipeline(payload):
-        return (fake_pdf, "bold_header", "professional_blue", "groq", "llama-3.3-70b-versatile")
+    async def fake_pipeline(payload, db):
+        return (fake_pdf, "bold_header", "professional_blue", "groq", "llama-3.3-70b-versatile", "high")
 
     async def fake_deliver(url, payload, secret):
         return True

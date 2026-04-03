@@ -98,11 +98,12 @@ async def test_export_training_data_formats_correctly(test_db):
     from schemas.feedback_schema import FeedbackRequest
     from services.feedback_service import store_feedback
 
-    await store_feedback_log("user_e", "myplat", "sess-301", "cv", {"q": "cv"}, {"ans": "here"}, "groq", "m", 200, test_db)
+    long_response = {"ans": "A" * 250}  # must be >=200 chars for is_training_eligible
+    await store_feedback_log("user_e", "myplat", "sess-301", "cv", {"q": "cv"}, long_response, "groq", "m", 200, test_db)
     await test_db.flush()
     await store_feedback(FeedbackRequest(session_id="sess-301", service="cv", rating=5), "user_e", "myplat", test_db)
 
-    rows = await export_training_data("myplat", test_db, min_rating=4)
+    rows = await export_training_data(test_db, platform="myplat", min_rating=4)
     assert len(rows) >= 1
     assert "prompt" in rows[0]
     assert "completion" in rows[0]

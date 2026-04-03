@@ -116,7 +116,8 @@ async def export_session(
     fmt: ExportFormat = format if format in ("markdown", "json", "plain") else "markdown"
     content, content_type = await _export(user_id, platform, session_id, fmt, db)
 
-    filename = f"conversation-{session_id[:12]}.{{'markdown':'md','json':'json','plain':'txt'}[fmt]}"
+    ext = {"markdown": "md", "json": "json", "plain": "txt"}.get(fmt, "md")
+    filename = f"conversation-{session_id[:12]}.{ext}"
     return FastResponse(
         content=content,
         media_type=content_type,

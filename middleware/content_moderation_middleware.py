@@ -34,7 +34,9 @@ class ContentModerationMiddleware(BaseHTTPMiddleware):
         is_safe, category = screen_input(text)
 
         # Augment with NVIDIA safety model for deeper content checking
-        if is_safe:
+        # Skip in test env — NVIDIA API calls are not mocked and would block all tests
+        from config import settings as _settings
+        if is_safe and getattr(_settings, "APP_ENV", "") != "testing":
             is_safe, category = await nvidia_safety_check(text)
 
         if is_safe:

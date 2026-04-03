@@ -35,10 +35,33 @@ async def nvidia_safety_check(text: str) -> tuple[bool, str]:
             max_tokens=10,
             temperature=0.0,
         )
-        verdict = (response.choices[0].message.content or "").strip().upper()
-        if verdict == "SAFE" or not verdict:
+        raw = (response.choices[0].message.content or "").strip()
+
+        # NIM models sometimes return JSON instead of a bare label.
+        # e.g. '{"user safety": "safe", "safety categories": {...}}'
+        # Parse JSON and extract the verdict from known fields.
+        import json as _json
+        try:
+            data = _json.loads(raw)
+            if isinstance(data, dict):
+                # Primary field used by nemoguard
+                user_safety = str(data.get("user safety", "")).lower()
+                if user_safety == "safe":
+                    return True, ""
+                if user_safety in ("unsafe", "blocked"):
+                    cats = data.get("safety categories", {})
+                    category = next(
+                        (k for k, v in cats.items() if str(v).lower() == "true"),
+                        "unsafe",
+                    ) if isinstance(cats, dict) else "unsafe"
+                    return False, category
+        except (_json.JSONDecodeError, TypeError):
+            pass
+
+        verdict = raw.upper()
+        if not verdict or verdict == "SAFE" or "safe" in verdict.lower():
             return True, ""
-        return False, verdict.lower()
+        return False, raw.lower()
     except Exception:
         # NVIDIA unavailable — fail open (local moderator still runs separately)
         return True, ""

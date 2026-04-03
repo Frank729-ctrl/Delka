@@ -188,6 +188,13 @@ async def client(test_engine, monkeypatch):
     _rl._key_windows.clear()
     _rl._ip_windows.clear()
 
+    # Reset provider health state so one test's failures don't cause another
+    # test's providers to be skipped as unhealthy
+    import services.rate_limit_service as _rls
+    _rls._failure_counts.clear()
+    if hasattr(_rls, "_rate_limited_until"):
+        _rls._rate_limited_until.clear()
+
     from main import app
     app.dependency_overrides[get_db] = override_get_db
 
