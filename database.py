@@ -73,6 +73,27 @@ async def create_all_tables() -> None:
         platform_skill_model,
         mcp_server_model,
         hook_subscription_model,
+        session_checkpoint_model,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # ── Additive column migrations (safe to re-run — IF NOT EXISTS) ──────────
+    # create_all() only creates new tables; these ALTER TABLEs add columns to
+    # existing tables without dropping or modifying any existing data.
+    _additive_migrations = [
+        # Feature 3: per-message metadata on conversation_logs
+        "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS provider VARCHAR(50)",
+        "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS model_name VARCHAR(100)",
+        "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS input_tokens INTEGER",
+        "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS output_tokens INTEGER",
+        "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS cost_usd FLOAT",
+        "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS effort_tier VARCHAR(20)",
+        "ALTER TABLE conversation_logs ADD COLUMN IF NOT EXISTS latency_ms FLOAT",
+    ]
+    async with engine.begin() as conn:
+        for sql in _additive_migrations:
+            try:
+                await conn.execute(__import__("sqlalchemy").text(sql))
+            except Exception:
+                pass  # column already exists or DB doesn't support IF NOT EXISTS
