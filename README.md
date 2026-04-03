@@ -307,12 +307,14 @@ Keys are created via the admin endpoint using the master key.
 ### Documents & Workspace
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/v1/workspace/files` | Upload file |
-| `GET` | `/v1/workspace/files` | List files |
-| `GET` | `/v1/workspace/files/{name}` | Read file |
-| `PUT` | `/v1/workspace/files/{name}` | Edit file (targeted replace) |
-| `DELETE` | `/v1/workspace/files/{name}` | Delete file |
-| `GET` | `/v1/workspace/search` | Search across all files |
+| `POST` | `/v1/workspace/files` | **Write** — upload / overwrite a file |
+| `GET` | `/v1/workspace/files` | List files with metadata |
+| `GET` | `/v1/workspace/files/{name}` | **Read** — full file or line range (`?offset=&limit=`) |
+| `PUT` | `/v1/workspace/files/{name}` | **Edit** — targeted old→new string replace |
+| `DELETE` | `/v1/workspace/files/{name}` | Delete a file |
+| `GET` | `/v1/workspace/glob?pattern=*.py` | **Glob** — find files by name pattern |
+| `GET` | `/v1/workspace/grep?pattern=def+foo` | **Grep** — regex search with line numbers + context |
+| `GET` | `/v1/workspace/search?q=keyword` | Keyword search (used by chat plugin) |
 | `POST` | `/v1/doc/ask` | Ask question about uploaded doc |
 | `POST` | `/v1/diff` | Diff two text documents |
 | `POST` | `/v1/diff/versions` | Diff two saved CV versions |

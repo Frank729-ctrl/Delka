@@ -21,6 +21,7 @@ Used by: chat_service (AI reads user files on request),
          doc_qa_service (workspace files as document sources),
          cv_service (auto-saves generated CVs to workspace).
 """
+import fnmatch
 import re
 import time
 import uuid
@@ -226,6 +227,124 @@ async def delete_file(
         return True
     except Exception:
         return False
+
+
+# ── Glob ─────────────────────────────────────────────────────────────────────
+
+async def glob_files(
+    user_id: str,
+    platform: str,
+    pattern: str,
+    db: AsyncSession,
+) -> list[str]:
+    """
+    Return filenames matching a glob pattern (e.g. '*.py', '**/*.md').
+    Ports Claude Code's Glob tool — operates over the user's cloud workspace.
+    """
+    files = await list_files(user_id, platform, db)
+    matched = []
+    for f in files:
+        name = f["filename"]
+        # fnmatch handles *.py, prefix/*.py; treat ** as * for single-dir workspace
+        normalised = pattern.replace("**/", "")
+        if fnmatch.fnmatch(name, normalised) or fnmatch.fnmatch(name, pattern):
+            matched.append(name)
+    return sorted(matched)
+
+
+# ── Grep ──────────────────────────────────────────────────────────────────────
+
+async def grep_files(
+    user_id: str,
+    platform: str,
+    pattern: str,
+    db: AsyncSession,
+    glob_filter: str = "*",
+    context_lines: int = 0,
+    max_results: int = 50,
+) -> list[dict]:
+    """
+    Regex search across workspace files — ports Claude Code's Grep tool.
+
+    Returns list of matches:
+      { filename, line_number, line, before: [...], after: [...] }
+
+    Args:
+        pattern:       regex to search for
+        glob_filter:   only search files matching this glob (default '*')
+        context_lines: lines of context before + after each match
+        max_results:   cap total matches returned
+    """
+    try:
+        rx = re.compile(pattern, re.IGNORECASE)
+    except re.error as e:
+        return [{"error": f"Invalid regex: {e}"}]
+
+    # Load all files matching glob_filter
+    all_files = await list_files(user_id, platform, db)
+    target_names = [
+        f["filename"] for f in all_files
+        if fnmatch.fnmatch(f["filename"], glob_filter.replace("**/", ""))
+    ]
+
+    results = []
+    for filename in target_names:
+        if len(results) >= max_results:
+            break
+        content = await read_file(user_id, platform, filename, db)
+        if not content:
+            continue
+        lines = content.splitlines()
+        for i, line in enumerate(lines):
+            if len(results) >= max_results:
+                break
+            if rx.search(line):
+                before = lines[max(0, i - context_lines): i] if context_lines else []
+                after = lines[i + 1: i + 1 + context_lines] if context_lines else []
+                results.append({
+                    "filename": filename,
+                    "line_number": i + 1,   # 1-based like real grep
+                    "line": line,
+                    "before": before,
+                    "after": after,
+                })
+
+    return results
+
+
+# ── Read with offset / limit ──────────────────────────────────────────────────
+
+async def read_file_range(
+    user_id: str,
+    platform: str,
+    filename: str,
+    db: AsyncSession,
+    offset: int = 0,
+    limit: int | None = None,
+) -> dict | None:
+    """
+    Read a slice of a file by line numbers — ports Claude Code's Read tool.
+
+    Args:
+        offset: 0-based line to start from (default 0)
+        limit:  max lines to return (default: all)
+
+    Returns dict with content, total_lines, returned_lines, offset.
+    Returns None if file not found.
+    """
+    content = await read_file(user_id, platform, filename, db)
+    if content is None:
+        return None
+    lines = content.splitlines()
+    total = len(lines)
+    sliced = lines[offset: offset + limit if limit else total]
+    return {
+        "filename": filename,
+        "content": "\n".join(sliced),
+        "total_lines": total,
+        "returned_lines": len(sliced),
+        "offset": offset,
+    }
 
 
 # ── Context builder ───────────────────────────────────────────────────────────
