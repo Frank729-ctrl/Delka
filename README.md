@@ -329,6 +329,14 @@ Keys are created via the admin endpoint using the master key.
 | `POST` | `/v1/notebook/sessions/{id}/run` | Run a cell |
 | `GET` | `/v1/notebook/sessions/{id}/export` | Export as .ipynb |
 
+### Remote Sessions (Webhook-triggered)
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/remote/trigger` | Queue a prompt → 202, result POSTed to callback_url |
+| `GET` | `/v1/remote/sessions/{id}` | Poll session status + result |
+| `GET` | `/v1/remote/sessions` | List recent sessions |
+| `POST` | `/v1/remote/purge` | Clean up old sessions |
+
 ### Background Tasks
 | Method | Path | Description |
 |---|---|---|
