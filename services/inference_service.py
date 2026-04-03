@@ -82,12 +82,41 @@ async def generate_full_response(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     user_id: str = "",
+    effort=None,   # EffortEstimate | None — if provided, overrides task chain + params
 ) -> tuple[str, str, str]:
     """
     Tries each provider in the task chain until one succeeds.
     Checks A/B test assignment first when user_id is provided.
+    If effort is provided, uses effort-optimised chain + temperature/max_tokens.
     Returns: (response_text, provider_name, model_name)
     """
+    # ── Effort routing override ───────────────────────────────────────────────
+    if effort is not None:
+        from services.effort_service import get_effort_chain_override
+        effort_chain = get_effort_chain_override(effort)
+        if effort_chain:
+            # Use effort-selected chain, temperature, and max_tokens
+            temperature = effort.temperature
+            max_tokens = effort.max_tokens
+            for entry in effort_chain:
+                provider_name: str = entry["provider"]
+                model: str = entry["model"]
+                provider = PROVIDER_INSTANCES.get(provider_name)
+                if provider is None or not provider.is_available():
+                    continue
+                if not is_provider_healthy(provider_name):
+                    continue
+                try:
+                    text = await provider.generate_full(
+                        system_prompt, user_prompt, model, temperature, max_tokens
+                    )
+                    record_provider_success(provider_name)
+                    return text, provider_name, model
+                except Exception as e:
+                    record_provider_failure(provider_name, is_rate_limit=provider.is_rate_limit_error(e))
+                    continue
+            # All effort-chain providers failed → fall through to normal chain below
+
     # A/B test override — checked before normal chain
     if user_id:
         from services.ab_test_service import get_model_for_user
@@ -179,11 +208,43 @@ async def generate_stream_response(
     task: str,
     messages: list[dict],
     temperature: float = 0.8,
+    effort=None,   # EffortEstimate | None
 ) -> AsyncGenerator[str, None]:
     """
     Tries each provider in the task chain for streaming.
+    If effort is provided, uses effort-optimised chain + temperature.
     Attempts connection before yielding anything, then yields tokens.
     """
+    # ── Effort routing override ───────────────────────────────────────────────
+    if effort is not None:
+        from services.effort_service import get_effort_chain_override
+        effort_chain = get_effort_chain_override(effort)
+        if effort_chain:
+            temperature = effort.temperature
+            for entry in effort_chain:
+                provider_name: str = entry["provider"]
+                model: str = entry["model"]
+                provider = PROVIDER_INSTANCES.get(provider_name)
+                if provider is None or not provider.is_available():
+                    continue
+                if not is_provider_healthy(provider_name):
+                    continue
+                try:
+                    gen = provider.generate_stream(messages, model, temperature)
+                    first_token = None
+                    async for token in gen:
+                        first_token = token
+                        break
+                    if first_token is not None:
+                        yield first_token
+                        async for token in gen:
+                            yield token
+                        return
+                except Exception as e:
+                    record_provider_failure(provider_name, is_rate_limit=provider.is_rate_limit_error(e))
+                    continue
+            # All effort-chain providers failed → fall through to normal chain
+
     chain = get_task_chain(task)
 
     for entry in chain:

@@ -29,6 +29,7 @@ from services.search_service import needs_search, extract_search_query, search
 from services.plugins.plugin_service import run_plugins
 from services.capability_router import route_capability
 from services.skills_service import detect_skill, run_skill, get_skills_context
+from services.effort_service import estimate_effort, effort_metadata
 from services.coordinator_service import needs_coordinator, run_coordinator
 from services.token_counter import should_compact, context_usage_ratio
 from services.relevant_memory_service import get_relevant_memories, format_memories_for_prompt
@@ -97,6 +98,14 @@ async def chat(
     # Extract any preference-setting instructions from this message, load current settings
     await extract_and_save_preferences(request.message, user_id, platform, db)
     user_settings = await get_user_settings(user_id, platform, db)
+
+    # ── 3b. Effort estimation — pick best provider before any work ───────────
+    effort = estimate_effort(request.message, history_length=len(recent_history))
+    # Emit effort metadata so frontend can show routing info
+    yield f"data: {json.dumps({'type': 'effort', **effort_metadata(effort)})}\n\n"
+    log_event("effort_routed", platform=platform, user_id=user_id,
+              tier=effort.tier, task=effort.task, confidence=effort.confidence,
+              reasoning=effort.reasoning)
 
     # ── 4. Correction detection ───────────────────────────────────────────────
     correction_ack = await extract_and_store_correction(
@@ -311,7 +320,7 @@ async def chat(
     lsp_state = LSPStreamState()
     tokens: list[str] = []
 
-    async for token in _inference_stream("chat", messages):
+    async for token in _inference_stream(effort.task, messages, effort=effort):
         tokens.append(token)
         yield f"data: {token}\n\n"
         # Emit any LSP diagnostic events triggered by this token
