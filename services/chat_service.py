@@ -30,6 +30,7 @@ from services.plugins.plugin_service import run_plugins
 from services.capability_router import route_capability
 from services.skills_service import detect_skill, run_skill, get_skills_context
 from services.effort_service import estimate_effort, effort_metadata
+from services.output_style_service import resolve_style, post_process, VALID_STYLES
 from services.coordinator_service import needs_coordinator, run_coordinator
 from services.token_counter import should_compact, context_usage_ratio
 from services.relevant_memory_service import get_relevant_memories, format_memories_for_prompt
@@ -101,11 +102,25 @@ async def chat(
 
     # ── 3b. Effort estimation — pick best provider before any work ───────────
     effort = estimate_effort(request.message, history_length=len(recent_history))
-    # Emit effort metadata so frontend can show routing info
     yield f"data: {json.dumps({'type': 'effort', **effort_metadata(effort)})}\n\n"
     log_event("effort_routed", platform=platform, user_id=user_id,
               tier=effort.tier, task=effort.task, confidence=effort.confidence,
               reasoning=effort.reasoning)
+
+    # ── 3c. Output style resolution ───────────────────────────────────────────
+    saved_style = (user_settings or {}).get("output_style") if user_settings else None
+    api_style = getattr(request, "output_style", None)
+    style_result = resolve_style(request.message, api_style=api_style, user_saved_style=saved_style)
+
+    # If user asked to persist this style, save it
+    if style_result.is_persistent_set and style_result.style != "auto":
+        from services.user_settings_service import save_user_setting
+        await save_user_setting(user_id, platform, "output_style", style_result.style, db)
+
+    # Emit style metadata event
+    yield f"data: {json.dumps({'type': 'output_style', 'style': style_result.style, 'detected_from': style_result.detected_from})}\n\n"
+    log_event("output_style_resolved", platform=platform, user_id=user_id,
+              style=style_result.style, detected_from=style_result.detected_from)
 
     # ── 4. Correction detection ───────────────────────────────────────────────
     correction_ack = await extract_and_store_correction(
@@ -258,9 +273,12 @@ async def chat(
         if ws_ctx:
             system_prompt = f"{system_prompt}\n\n{ws_ctx}"
 
-    # ── 9b. Adaptive length + user settings + tips ───────────────────────────
-    # Adaptive length: auto-detect intent (brief/detailed/bullets/code-only)
-    if get_feature_flag("brief_mode", True):
+    # ── 9b. Output style + adaptive length + user settings + tips ───────────
+    # Output style instruction (covers adaptive length — skip if already resolved)
+    if style_result.instruction:
+        system_prompt = f"{style_result.instruction}\n\n{system_prompt}"
+    elif get_feature_flag("brief_mode", True):
+        # Fallback: only run adaptive length if style didn't resolve to anything
         length_instr = build_length_instruction(request.message)
         if length_instr:
             system_prompt = f"{length_instr}\n\n{system_prompt}"
@@ -328,6 +346,13 @@ async def chat(
             yield lsp_event
 
     full_response = "".join(tokens)
+
+    # Post-process: enforce style on the assembled response (json/plain/brief/code_only)
+    processed = post_process(full_response, style_result.style)
+    if processed != full_response:
+        # Emit corrected version as a replacement event
+        yield f"data: {json.dumps({'type': 'style_correction', 'content': processed})}\n\n"
+        full_response = processed
 
     # Final full LSP pass after streaming completes
     for lsp_event in lsp_finalize(lsp_state, full_response):

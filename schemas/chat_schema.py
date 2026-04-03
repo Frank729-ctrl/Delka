@@ -1,4 +1,5 @@
 from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 
 class ChatRequest(BaseModel):
@@ -7,6 +8,8 @@ class ChatRequest(BaseModel):
     session_id: str = ""
     message: str
     context: dict = {}
+    output_style: Optional[str] = None  # auto|brief|detailed|bullets|numbered|narrative|
+                                        # code_only|table|json|plain|academic|slack|executive
 
 
 class ChatMetadata(BaseModel):

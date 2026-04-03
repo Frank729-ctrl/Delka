@@ -6,8 +6,15 @@ from database import get_db
 from schemas.chat_schema import ChatRequest
 from services.chat_service import chat
 from services.personality_service import analyze_user_tone
+from services.output_style_service import list_styles, VALID_STYLES
 
 router = APIRouter(prefix="/v1/chat", tags=["Chat"])
+
+
+@router.get("/styles", summary="List available output styles")
+async def get_styles():
+    """Return all valid output_style values and their descriptions."""
+    return {"status": "ok", "styles": list_styles(), "valid_values": sorted(VALID_STYLES)}
 
 
 @router.post("")

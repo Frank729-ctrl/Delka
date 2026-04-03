@@ -90,6 +90,17 @@ async def _save_settings(
         pass
 
 
+async def save_user_setting(
+    user_id: str,
+    platform: str,
+    key: str,
+    value: str,
+    db: AsyncSession,
+) -> None:
+    """Save a single user setting key/value."""
+    await _save_settings(user_id, platform, {key: value}, db)
+
+
 async def get_user_settings(
     user_id: str,
     platform: str,
