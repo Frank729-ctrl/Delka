@@ -322,6 +322,31 @@ async def chat(
         system_prompt = inject_tip_into_prompt(system_prompt, tip_text)
         mark_tip_shown(user_id, tip_id)
 
+    # ── 9c. Permission mode — inject restrictions into system prompt ─────────
+    from services.permission_service import (
+        resolve_permission, permission_instruction, get_platform_permission_mode,
+    )
+    platform_perm = await get_platform_permission_mode(platform, db)
+    request_perm = getattr(request, "permission_mode", None)
+    perm_profile = resolve_permission(
+        request_mode=request_perm,
+        platform_mode=platform_perm,
+    )
+    perm_instr = permission_instruction(perm_profile)
+    if perm_instr:
+        system_prompt = f"{perm_instr}\n\n{system_prompt}"
+
+    # Emit permission mode as metadata event
+    if perm_profile.mode != "auto":
+        yield f"data: {json.dumps({'type': 'permission_mode', 'mode': perm_profile.mode, 'source': perm_profile.source})}\n\n"
+
+    # Block restricted capabilities early
+    if not perm_profile.can_fetch_urls and fetch_task:
+        fetch_task.cancel()
+    if not perm_profile.can_write_memory:
+        log_event("permission_memory_write_blocked", platform=platform, user_id=user_id,
+                  mode=perm_profile.mode)
+
     # Skills when-to-use context (tells AI when to suggest /skills proactively)
     skills_ctx = get_skills_context()
     if skills_ctx:
@@ -424,7 +449,8 @@ async def chat(
     asyncio.create_task(_post_reply_tasks(
         user_id, platform, session_id,
         request.message, full_response,
-        recent_history, profile, db
+        recent_history, profile, db,
+        can_write_memory=perm_profile.can_write_memory,
     ))
 
 
@@ -437,6 +463,7 @@ async def _post_reply_tasks(
     recent_history: list[dict],
     profile,
     db: AsyncSession,
+    can_write_memory: bool = True,
 ) -> None:
     """
     All post-reply work runs here as a background task.
@@ -451,22 +478,27 @@ async def _post_reply_tasks(
             user_id, platform, session_id, "assistant", assistant_reply, db
         )
 
-        # Update structured memory profile
-        updates = await memory_service.extract_profile_updates(
-            user_message, assistant_reply, profile
-        )
-        await memory_service.update_profile(user_id, platform, updates, db)
+        # Update structured memory profile (skip if memory writes are blocked)
+        if can_write_memory:
+            updates = await memory_service.extract_profile_updates(
+                user_message, assistant_reply, profile
+            )
+            await memory_service.update_profile(user_id, platform, updates, db)
 
         # Background: extract session memories from this exchange
         from services.session_memory_service import extract_and_store
-        memory_result = await extract_and_store(
-            user_id, platform, session_id,
-            recent_history + [
-                {"role": "user", "content": user_message},
-                {"role": "assistant", "content": assistant_reply},
-            ],
-            db,
-        )
+        memory_result = None
+        if not can_write_memory:
+            pass  # permission mode blocks memory writes
+        else:
+            memory_result = await extract_and_store(
+                user_id, platform, session_id,
+                recent_history + [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": assistant_reply},
+                ],
+                db,
+            )
         # post_memory hook — fire after extraction completes
         fire_background("post_memory", platform, user_id, session_id, {
             "extracted": bool(memory_result),

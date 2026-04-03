@@ -53,6 +53,14 @@ class SessionEndRequest(BaseModel):
     reason: Optional[str] = Field(None, description="Why the session ended: user_closed|timeout|error")
 
 
+class AnalyzeRequest(BaseModel):
+    user_id: str
+    platform: str
+    session_id: str
+    store_as_memory: bool = Field(False, description="Save key findings as a project memory for future recall")
+    format: str = Field("json", description="Response format: json | markdown")
+
+
 @router.post("/session/end", summary="Explicitly close a session and fire session_end hook")
 async def session_end(req: SessionEndRequest, db: AsyncSession = Depends(get_db)):
     """
@@ -63,3 +71,30 @@ async def session_end(req: SessionEndRequest, db: AsyncSession = Depends(get_db)
         "reason": req.reason or "user_closed",
     }, db)
     return {"status": "ok", "message": "session_end hook fired"}
+
+
+@router.post("/analyze", summary="Deep analysis of a past conversation session (Thinkback)")
+async def analyze_session(req: AnalyzeRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Analyze a conversation session to extract structured intelligence:
+    key decisions, AI errors, intent evolution, action items, user patterns,
+    and confidence calibration issues.
+
+    Exceeds Claude Code's compactConversation — this is insight extraction,
+    not just summarization.
+    """
+    from services.thinkback_service import analyze_session as _analyze, format_insight_markdown
+    from dataclasses import asdict
+
+    insight = await _analyze(
+        session_id=req.session_id,
+        user_id=req.user_id,
+        platform=req.platform,
+        db=db,
+        store_as_memory=req.store_as_memory,
+    )
+
+    if req.format == "markdown":
+        return {"status": "ok", "markdown": format_insight_markdown(insight)}
+
+    return {"status": "ok", "data": asdict(insight)}

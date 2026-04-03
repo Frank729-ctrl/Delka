@@ -10,6 +10,7 @@ class ChatRequest(BaseModel):
     context: dict = {}
     output_style: Optional[str] = None  # auto|brief|detailed|bullets|numbered|narrative|
                                         # code_only|table|json|plain|academic|slack|executive
+    permission_mode: Optional[str] = None  # auto|manual|readonly|sandbox|restricted
 
 
 class ChatMetadata(BaseModel):
