@@ -266,9 +266,17 @@ async def chat(
     # Inject: team context → relevant memories → plugin context → search
     if team_ctx:
         system_prompt = f"{system_prompt}\n\n{team_ctx}"
-    mem_section = format_memories_for_prompt(relevant_mems)
-    if mem_section:
-        system_prompt = f"{system_prompt}\n\n{mem_section}"
+
+    # Structured memory manifest (MEMORY.md-equivalent, grouped by type)
+    from services.memory_manifest_service import manifest_for_prompt
+    memory_manifest = await manifest_for_prompt(user_id, platform, db)
+    if memory_manifest:
+        system_prompt = f"{system_prompt}\n\n{memory_manifest}"
+    else:
+        # Fallback to flat relevant memories if no structured memories yet
+        mem_section = format_memories_for_prompt(relevant_mems)
+        if mem_section:
+            system_prompt = f"{system_prompt}\n\n{mem_section}"
     if plugin_context:
         system_prompt = f"{system_prompt}\n\n{plugin_context}"
     if search_context:
