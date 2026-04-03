@@ -28,7 +28,7 @@ from services.correction_service import extract_and_store_correction
 from services.search_service import needs_search, extract_search_query, search
 from services.plugins.plugin_service import run_plugins
 from services.capability_router import route_capability
-from services.skills_service import detect_skill, run_skill
+from services.skills_service import detect_skill, run_skill, get_skills_context
 from services.coordinator_service import needs_coordinator, run_coordinator
 from services.token_counter import should_compact, context_usage_ratio
 from services.relevant_memory_service import get_relevant_memories, format_memories_for_prompt
@@ -270,6 +270,11 @@ async def chat(
         tip_id, tip_text = tip_result
         system_prompt = inject_tip_into_prompt(system_prompt, tip_text)
         mark_tip_shown(user_id, tip_id)
+
+    # Skills when-to-use context (tells AI when to suggest /skills proactively)
+    skills_ctx = get_skills_context()
+    if skills_ctx:
+        system_prompt = f"{system_prompt}\n\n{skills_ctx}"
 
     # ── 11. Build messages with token awareness ───────────────────────────────
     from services.inference_service import get_task_chain

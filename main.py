@@ -55,6 +55,7 @@ from routers.notebook_router import router as notebook_router
 from routers.sandbox_router import router as sandbox_router
 from routers.diff_router import router as diff_router
 from routers.voice_router import router as voice_router
+from routers.skills_router import router as skills_router
 from utils.logger import request_logger
 
 _logger = logging.getLogger("delkaai.main")
@@ -71,6 +72,11 @@ async def lifespan(app: FastAPI):
     from services.cron_service import run_scheduled_task_loop
     asyncio.create_task(start_analytics_flush_loop(AsyncSessionLocal))
     asyncio.create_task(run_scheduled_task_loop(AsyncSessionLocal))
+
+    # Disk-based skills — load at startup, hot-reload every 60s
+    from services.skill_loader_service import init_registry, start_hot_reload_loop
+    init_registry()
+    asyncio.create_task(start_hot_reload_loop())
 
     request_logger.info(
         f"DelkaAI v1 started | ENV:{settings.APP_ENV} | Model:{settings.OLLAMA_MODEL}"
@@ -192,4 +198,5 @@ app.include_router(notebook_router,            tags=["Notebooks"])
 app.include_router(sandbox_router,             tags=["Code Sandbox"])
 app.include_router(diff_router,                tags=["Document Diff"])
 app.include_router(voice_router,               tags=["Voice"])
+app.include_router(skills_router,              tags=["Skills"])
 app.include_router(honeypot_router.router,     tags=["*"])   # ← MUST BE LAST
